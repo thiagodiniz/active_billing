@@ -32,6 +32,7 @@ config/master.key
 ## Environment normalization:
 /.bundle
 /vendor/bundle
+/lib/bundler/man/
 
 # these should all be checked in to normalize the environment:
 # Gemfile.lock, .ruby-version, .ruby-gemset
@@ -46,6 +47,14 @@ bower.json
 
 # Ignore pow environment settings
 .powenv
+*.gem
+/.config
+/InstalledFiles
+/pkg/
+/spec/reports/
+/spec/examples.txt
+/test/tmp/
+/test/version_tmp/
 
 # Ignore Byebug command history file.
 .byebug_history
@@ -67,3 +76,30 @@ yarn-debug.log*
 /storage/*
 !/storage/.keep
 /public/uploads
+## Specific to RubyMotion:
+.dat*
+.repl_history
+build/
+*.bridgesupport
+build-iPhoneOS/
+build-iPhoneSimulator/
+
+## Specific to RubyMotion (use of CocoaPods):
+Pods/
+
+## Documentation cache and generated files:
+/.yardoc/
+/_yardoc/
+/doc/
+/rdoc/
+
+# for a library or gem, you might want to ignore these files since the code is
+# intended to run in multiple environments; otherwise, check them in:
+Gemfile.lock
+.ruby-version
+.ruby-gemset
+
+# Used by RuboCop. Remote config files pulled in from inherit_from directive.
+.rubocop-https?--*
+
+.DS_Store
