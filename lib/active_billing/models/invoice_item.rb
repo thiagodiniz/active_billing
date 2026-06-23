@@ -1,13 +1,11 @@
 module ActiveBilling
   class InvoiceItem < ActiveRecord::Base
-    self.table_name = 'active_billing_invoice_items'
-
-    belongs_to :invoice, class_name: 'ActiveBilling::Invoice',
-               foreign_key: 'billing_invoice_id',
-               inverse_of: :items
-    belongs_to :usage, class_name: 'ActiveBilling::Usage',
-               inverse_of: :invoice_items,
-               optional: true
+    belongs_to :invoice, class_name: "ActiveBilling::Invoice",
+                         foreign_key: "billing_invoice_id",
+                         inverse_of: :items
+    belongs_to :usage, class_name: "ActiveBilling::Usage",
+                       inverse_of: :invoice_items,
+                       optional: true
 
     validates :quantity, numericality: { greater_than: 0, only_integer: true }
     validates :key, presence: true, allow_blank: false

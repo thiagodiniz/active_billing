@@ -2,11 +2,13 @@ class CreateActiveBillingTables < ActiveRecord::Migration[7.0]
   def change
     # Enable UUID extension if not already enabled
     enable_extension 'pgcrypto' unless extension_enabled?('pgcrypto')
+    # Enable hstore for email timestamp storage
+    enable_extension 'hstore' unless extension_enabled?('hstore')
 
     create_table :active_billing_charges do |t|
       t.uuid :uuid, default: -> { "gen_random_uuid()" }, null: false
       t.references :resource, polymorphic: true, null: false
-      t.references :invoice, foreign_key: { to_table: :active_billing_invoices }
+      t.references :invoice
       t.integer :default_penalty
       t.integer :default_interest
 

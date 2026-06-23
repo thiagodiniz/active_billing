@@ -1,0 +1,14 @@
+<h1><%= t("active_billing.usage.show_title", default: "Usage") %> — <%= @usage.month %></h1>
+
+<dl class="active-billing-details">
+  <dt><%= t("active_billing.usage.total_cost", default: "Total cost") %></dt>
+  <dd><%= format_cents(@usage.total_cost_in_cents) %></dd>
+
+  <dt><%= t("active_billing.usage.invoice_status", default: "Invoice") %></dt>
+  <dd><%= @usage.invoice_status %></dd>
+
+  <dt><%= t("active_billing.usage.events_count", default: "Events") %></dt>
+  <dd><%= @usage.events.count %></dd>
+</dl>
+
+<p><%= link_to t("active_billing.back", default: "Back"), usages_path(current_scope_params) %></p>

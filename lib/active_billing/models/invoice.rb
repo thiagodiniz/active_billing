@@ -1,10 +1,7 @@
 module ActiveBilling
   class Invoice < ActiveRecord::Base
-    include CurrencyAttribute
-    include TimestampStoreAccessor
-    include NfeDescription
-
-    self.table_name = 'active_billing_invoices'
+    include Concerns::TimestampStoreAccessor
+    include Concerns::NfeDescription
 
     CANCEL_LIMIT_DAYS = 10
 
@@ -12,40 +9,41 @@ module ActiveBilling
 
     email_timestamp_store_accessors :notification, :charge
 
-    currency_attrs :amount
+    attribute :amount_in_cents, :active_billing_money
 
     enum :state, {
-      created: 'created',
-      processing: 'processing',
-      issued: 'issued',
-      cancelled: 'cancelled',
-      failed: 'failed'
+      created: "created",
+      processing: "processing",
+      issued: "issued",
+      cancelled: "cancelled",
+      failed: "failed"
     }
 
     enum :payment_collected_medium, {
-      missing: 'missing',
-      transfer: 'transfer',
-      charge: 'charge',
-      gateway: 'gateway'
-    }, default: 'missing', suffix: 'payment'
+      missing: "missing",
+      transfer: "transfer",
+      charge: "charge",
+      gateway: "gateway"
+    }, default: "missing", suffix: "payment"
 
     belongs_to :resource, polymorphic: true
+    belongs_to :billing, class_name: "ActiveBilling::Billing", optional: true
 
-    has_many :charges, class_name: 'ActiveBilling::Charge',
-             foreign_key: 'invoice_id',
-             inverse_of: :invoice,
-             dependent: :nullify
+    has_many :charges, class_name: "ActiveBilling::Charge",
+                       foreign_key: "invoice_id",
+                       inverse_of: :invoice,
+                       dependent: :nullify
 
-    has_many :items, class_name: 'ActiveBilling::InvoiceItem',
-             foreign_key: 'billing_invoice_id',
-             inverse_of: :invoice,
-             dependent: :destroy
+    has_many :items, class_name: "ActiveBilling::InvoiceItem",
+                     foreign_key: "billing_invoice_id",
+                     inverse_of: :invoice,
+                     dependent: :destroy
     accepts_nested_attributes_for :items, allow_destroy: true
 
     has_many :usages, -> { distinct }, through: :items
 
     validates :state, exclusion: { in: %w[cancelled] }, unless: :cancellable?
-    validates :amount, numericality: { greater_than: 0 }
+    validates :amount_in_cents, comparison: { greater_than: 0 }
     validates :description, presence: true
     validate :usages_belong_to_same_entity
 
@@ -54,6 +52,10 @@ module ActiveBilling
     before_validation :add_items_from_added_usages
     before_validation :set_amount
     before_validation :set_description
+
+    scope :for_billable_entity, ->(type, id) {
+      joins(:billing).where(active_billing_billings: { billable_entity_type: type, billable_entity_id: id })
+    }
 
     def cancellable?
       issued_at.present? &&
@@ -93,7 +95,7 @@ module ActiveBilling
       return if uuid_month.blank?
 
       month = uuid_month.first[1]
-      usage_uuids = uuid_month.map { |i| i[0] }.join(', #')
+      usage_uuids = uuid_month.map { |i| i[0] }.join(", #")
       self.description = format(
         nfe_resource_description,
         { month: I18n.l(month, format: :month), uuids: usage_uuids }
@@ -101,7 +103,7 @@ module ActiveBilling
     end
 
     def set_issued_at
-      return unless state_changed?(to: 'issued')
+      return unless state_changed?(to: "issued")
       return if issued_at.present?
 
       self.issued_at = Date.current
@@ -111,7 +113,7 @@ module ActiveBilling
       to_remove = usage_ids.difference(add_usages_ids)
 
       return if to_remove.empty?
-      return errors.add(:items, :invalid, message: 'cannot be changed after invoice is issued') unless issuable?
+      return errors.add(:items, :invalid, message: "cannot be changed after invoice is issued") unless issuable?
 
       items.where(usage_id: to_remove).destroy_all
     end
@@ -119,11 +121,11 @@ module ActiveBilling
     def add_items_from_added_usages
       to_add = add_usages_ids.difference(usage_ids)
       return if to_add.blank?
-      return errors.add(:items, :invalid, message: 'cannot change items after is issued') unless issuable?
+      return errors.add(:items, :invalid, message: "cannot change items after is issued") unless issuable?
 
       items_from_usages = ActiveBilling::Usage.where(id: to_add).map(&:to_invoice_items_attributes).flatten
       if items_from_usages.blank?
-        return errors.add(:items, :blank, message: 'items cannot be blank when usages are informed')
+        return errors.add(:items, :blank, message: "items cannot be blank when usages are informed")
       end
 
       self.items_attributes = items_from_usages
@@ -133,7 +135,7 @@ module ActiveBilling
       return if items.empty?
       return unless issuable?
 
-      self.amount = items.sum(&:price)
+      self.amount_in_cents = ActiveBilling::Money.from_amount(items.sum(&:price))
     end
 
     def usages_belong_to_same_entity

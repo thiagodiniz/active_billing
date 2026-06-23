@@ -103,3 +103,14 @@ Gemfile.lock
 .rubocop-https?--*
 
 .DS_Store
+
+# Claude Code local files
+.claude/
+CLAUDE.local.md
+
+# Dummy test app runtime artifacts
+test/dummy/log/*
+test/dummy/tmp/*
+test/dummy/db/*.sqlite3*
+test/dummy/storage/
+test/dummy/tmp/local_secret.txt

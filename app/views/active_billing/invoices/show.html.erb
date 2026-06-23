@@ -1,0 +1,43 @@
+<h1><%= t("active_billing.invoice.show_title", default: "Invoice") %> <%= @invoice.uuid %></h1>
+
+<dl class="active-billing-details">
+  <dt><%= t("active_billing.invoice.state", default: "State") %></dt>
+  <dd><%= t("active_billing.invoice.states.#{@invoice.state}", default: @invoice.state.humanize) %></dd>
+
+  <dt><%= t("active_billing.invoice.amount", default: "Amount") %></dt>
+  <dd><%= format_cents(@invoice.amount_in_cents) %></dd>
+
+  <dt><%= t("active_billing.invoice.description", default: "Description") %></dt>
+  <dd><%= @invoice.description %></dd>
+
+  <dt><%= t("active_billing.invoice.issued_at", default: "Issued at") %></dt>
+  <dd><%= @invoice.issued_at %></dd>
+</dl>
+
+<h2><%= t("active_billing.invoice.items", default: "Line items") %></h2>
+<% if @invoice.items.empty? %>
+  <p><%= t("active_billing.invoice.no_items", default: "No line items.") %></p>
+<% else %>
+  <table class="active-billing-table">
+    <thead>
+      <tr>
+        <th><%= t("active_billing.invoice_item.key", default: "Item") %></th>
+        <th><%= t("active_billing.invoice_item.quantity", default: "Quantity") %></th>
+        <th><%= t("active_billing.invoice_item.unit_price", default: "Unit price") %></th>
+        <th><%= t("active_billing.invoice_item.price", default: "Price") %></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @invoice.items.each do |item| %>
+        <tr>
+          <td><%= item.key %></td>
+          <td><%= item.quantity %></td>
+          <td><%= item.unit_price %></td>
+          <td><%= item.price %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>
+
+<p><%= link_to t("active_billing.back", default: "Back"), invoices_path(current_scope_params) %></p>

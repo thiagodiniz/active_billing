@@ -1,0 +1,26 @@
+<h1><%= t("active_billing.charge.index_title", default: "Charges") %></h1>
+
+<% if @charges.empty? %>
+  <p><%= t("active_billing.charge.empty", default: "No charges for this billable entity.") %></p>
+<% else %>
+  <table class="active-billing-table">
+    <thead>
+      <tr>
+        <th><%= t("active_billing.charge.uuid", default: "Reference") %></th>
+        <th><%= t("active_billing.charge.invoice", default: "Invoice") %></th>
+        <th><%= t("active_billing.charge.created_at", default: "Created at") %></th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @charges.each do |charge| %>
+        <tr>
+          <td><%= charge.uuid %></td>
+          <td><%= charge.invoice&.uuid %></td>
+          <td><%= charge.created_at %></td>
+          <td><%= link_to t("active_billing.show", default: "View"), charge_path(charge, current_scope_params) %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>

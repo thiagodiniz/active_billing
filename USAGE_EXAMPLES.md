@@ -2,6 +2,8 @@
 
 Practical recipes for installing, configuring, and using ActiveBilling — both in embedded mode (host Rails app) and standalone mode (mounted billing service).
 
+> **Implementation status.** Recipes that rely on the Billing lifecycle helpers (`close!`, `finalize!`, adjustment methods) and the standalone JSON API document the **intended** behavior and are tagged **(planned)** at the section level — those methods/endpoints are not yet implemented. The **Portal web UI**, **override generators**, Plan/Billing models, and `for_billable_entity` scoping work today.
+
 ## Table of Contents
 
 1. [Basic Setup](#basic-setup)
@@ -12,8 +14,9 @@ Practical recipes for installing, configuring, and using ActiveBilling — both 
 6. [Finalizing, Issuing, Charging](#finalizing-issuing-charging)
 7. [Pricing Models](#pricing-models)
 8. [Advanced Scenarios](#advanced-scenarios)
-9. [Standalone Mode (JSON API)](#standalone-mode-json-api)
-10. [Testing](#testing)
+9. [Portal Web UI](#portal-web-ui)
+10. [Standalone Mode (JSON API)](#standalone-mode-json-api)
+11. [Testing](#testing)
 
 ## Basic Setup
 
@@ -28,7 +31,11 @@ ActiveBilling.configure do |config|
   config.default_interest       = 100  # 1.00%
   config.billing_entity_method  = :billing_entity
 
-  # Standalone mode only
+  # Default polymorphic type for the portal web UI when billable_entity_type
+  # is not supplied as a query param.
+  config.billable_entity_class  = "Customer"
+
+  # Standalone mode only (planned — API not yet implemented)
   config.api_enabled    = false
   config.api_authorizer = ->(req) { ApiToken.find_by(token: req.headers["X-Api-Key"]) }
 end
@@ -62,23 +69,33 @@ end
 
 ### Create a Plan
 
+The shipped `Plan` model exposes `name`, `price_in_cents` (a money-typed attribute), `interval` (`monthly`/`yearly`), `allowances` (jsonb), and `active`. `price_in_cents` returns an `ActiveBilling::Money` value object:
+
 ```ruby
-ActiveBilling::Plan.create!(
+plan = ActiveBilling::Plan.create!(
   name: "Pro",
-  recurring_amount: 99.00,
-  included_allowances: { api_call: 10_000, sms_sent: 200 },
+  price_in_cents: 9_900,                          # cents; or ActiveBilling::Money.from_amount(99.00)
+  interval: "monthly",
+  allowances: { api_call: 10_000, sms_sent: 200 },
   metadata: { tier: "pro" }
 )
+
+plan.price_in_cents          # => #<ActiveBilling::Money BRL 99.00>
+plan.price_in_cents.to_d     # => 0.99e2 (BigDecimal)
+plan.price_in_cents.cents    # => 9900
 ```
 
-### Subclass Plan for domain logic
+### Add domain logic to Plan
+
+Add behavior in your app (e.g. via a decorator or a `to_prepare` reopen) using the money value object:
 
 ```ruby
-class Plan < ActiveBilling::Plan
-  validates :recurring_amount_in_cents, numericality: { greater_than: 0 }
-
-  def annual_amount
-    recurring_amount * 12
+# config/initializers/active_billing.rb (or a decorator)
+Rails.application.config.to_prepare do
+  ActiveBilling::Plan.class_eval do
+    def annual_price
+      price_in_cents.to_d * 12
+    end
   end
 end
 ```
@@ -89,14 +106,17 @@ end
 
 ```ruby
 billing = customer.billings.create!(
-  plan:         Plan.find_by!(name: "Pro"),
-  cycle_start:  Date.current.beginning_of_month,
-  cycle_end:    Date.current.end_of_month,
-  interval:     :monthly
+  plan:         ActiveBilling::Plan.find_by!(name: "Pro"),
+  period_start: Date.current.beginning_of_month,
+  period_end:   Date.current.end_of_month
 )
+
+ActiveBilling::Billing.current_for(customer)     # → the latest open Billing
 ```
 
-Creating a Billing snapshots the Plan onto it (`plan_name`, `plan_amount_in_cents`, `plan_allowances`) and opens an associated `Usage` for the cycle window.
+While the Billing is `open`, assigning a `plan` snapshots it onto the record (`plan_name`, `plan_price_in_cents`, `plan_allowances`) on validation. A Billing can aggregate `Usage` records from multiple resources, so several stores can be unified into one Invoice/Charge or billed individually.
+
+> **Planned:** automatically opening a `Usage` when a Billing is created is not yet implemented — associate `Usage` records with a Billing directly (`usage.update!(billing: billing)`).
 
 ### Custom interval
 
@@ -150,6 +170,8 @@ billing.usage.events.create!(
 ```
 
 ## Closing and Adjusting
+
+> **(Planned.)** This entire section describes the target lifecycle. `close!`, the adjustment helpers, and `BillingLineItem` are **not yet implemented**.
 
 ### Close the cycle
 
@@ -205,6 +227,8 @@ end
 ```
 
 ## Finalizing, Issuing, Charging
+
+> **(Planned.)** `Billing#finalize!` and the `Charge` state-transition helpers are **not yet implemented**. You can still build `Invoice`/`InvoiceItem`/`Charge` records directly and associate them with a `Billing`.
 
 ```ruby
 invoice = billing.finalize!     # creates Invoice + InvoiceItems; locks the Billing
@@ -391,7 +415,42 @@ module Billing
 end
 ```
 
+## Portal Web UI
+
+Mount the engine to expose the read-only portal. Every list is scoped by `billable_entity_id` (and `billable_entity_type`, unless `config.billable_entity_class` is set):
+
+```ruby
+# config/routes.rb
+Rails.application.routes.draw do
+  mount ActiveBilling::Engine => "/billing"
+end
+```
+
+```
+GET /billing/invoices?billable_entity_id=42&billable_entity_type=Store   # list
+GET /billing/invoices/123?billable_entity_id=42&billable_entity_type=Store
+GET /billing/usages?billable_entity_id=42&billable_entity_type=Store
+GET /billing/charges?billable_entity_id=42&billable_entity_type=Store
+GET /billing/plan?billable_entity_id=42&billable_entity_type=Store       # current plan
+```
+
+`index` actions return **400** when no `billable_entity_id` (or resolvable type) is supplied. The portal is read-only — there are no create/update/destroy routes.
+
+### Override the shipped views or controllers
+
+The engine's views/controllers are used by default. Generate local copies to customize them; Rails resolves the host app's files ahead of the engine's:
+
+```bash
+bin/rails generate active_billing:views        # → app/views/active_billing/**
+bin/rails generate active_billing:controllers  # → app/controllers/active_billing/**
+bin/rails generate active_billing:install      # → config/initializers/active_billing.rb
+```
+
+For example, after `active_billing:views` you can edit `app/views/active_billing/invoices/index.html.erb` to change how invoices render, without touching the gem.
+
 ## Standalone Mode (JSON API)
+
+> **(Planned.)** The JSON API below is **not yet implemented**. Mounting the engine today gives you the read-only [Portal Web UI](#portal-web-ui); the versioned API controllers and serializers are on the roadmap.
 
 When the gem runs as a standalone billing service, external products interact over HTTP. Mount the engine and enable the API:
 
@@ -452,6 +511,8 @@ POST /billing/api/v1/charges/:id/mark_paid
 Every endpoint maps 1:1 to a model method in embedded mode. The standalone API is a thin HTTP surface — no parallel business logic.
 
 ## Testing
+
+> **Note.** The lifecycle and standalone-API specs below exercise **planned** behavior (`close!`, `finalize!`, the JSON API) and reference factory/attribute names from the target design. The specs that ship today live under `spec/` — model specs for `Plan`/`Billing` and the `for_billable_entity` scopes, plus request/routing specs for the portal — and use factories like `:active_billing_plan`, `:active_billing_billing`, etc. Run them with `bundle exec rspec` (PostgreSQL required).
 
 ### Plan spec
 

@@ -1,47 +1,48 @@
 module ActiveBilling
   class Usage < ActiveRecord::Base
-    include CurrencyAttribute
-    include TimestampStoreAccessor
-
-    self.table_name = 'active_billing_usages'
+    include Concerns::TimestampStoreAccessor
 
     email_timestamp_store_accessors :notification, :charge
-    currency_attrs :total_cost
+
+    attribute :total_cost_in_cents, :active_billing_money
 
     # Override this association in your application
     # belongs_to :billable_entity (e.g., :customer, :tenant, :organization)
 
-    has_many :events, foreign_key: 'billing_usage_id',
-             class_name: 'ActiveBilling::Event',
-             inverse_of: :usage,
-             dependent: :destroy
+    belongs_to :billing, class_name: "ActiveBilling::Billing", optional: true
 
-    has_many :invoice_items, class_name: 'ActiveBilling::InvoiceItem',
-             foreign_key: 'usage_id',
-             dependent: :nullify,
-             inverse_of: :usage
+    has_many :events, foreign_key: "billing_usage_id",
+                      class_name: "ActiveBilling::Event",
+                      inverse_of: :usage,
+                      dependent: :destroy
+
+    has_many :invoice_items, class_name: "ActiveBilling::InvoiceItem",
+                             foreign_key: "usage_id",
+                             dependent: :nullify,
+                             inverse_of: :usage
     has_many :invoices, -> { distinct }, through: :invoice_items
 
+    scope :for_billable_entity, ->(type, id) { where(billable_entity_type: type, billable_entity_id: id) }
     scope :for_month, ->(date) { where(month: date.beginning_of_month) }
-    scope :for_year, ->(year) { where('extract(year from month) = ?', year) }
+    scope :for_year, ->(year) { where("extract(year from month) = ?", year) }
 
     scope :with_invoices, -> {
       where(id: ActiveBilling::Usage.joins(:invoice_items)
-                  .where.not(billing_invoice_items: { billing_invoice_id: nil })
-                  .select(:id))
+                                    .where.not(billing_invoice_items: { billing_invoice_id: nil })
+                                    .select(:id))
     }
 
     scope :without_invoices, -> {
       where.not(id: ActiveBilling::Usage.joins(:invoice_items)
-                        .where.not(billing_invoice_items: { billing_invoice_id: nil })
-                        .select(:id))
+                                        .where.not(billing_invoice_items: { billing_invoice_id: nil })
+                                        .select(:id))
     }
 
     scope :invoice_presence, ->(presence) {
       case presence
-      when 'with'
+      when "with"
         with_invoices
-      when 'without'
+      when "without"
         without_invoices
       else
         all
@@ -50,9 +51,9 @@ module ActiveBilling
 
     scope :with_invoice_state, ->(state) {
       where(id: ActiveBilling::Usage.joins(:invoice_items)
-                    .joins('JOIN active_billing_invoices ON active_billing_invoices.id = active_billing_invoice_items.billing_invoice_id')
-                    .where(active_billing_invoices: { state: state })
-                    .select(:id))
+                                    .joins("JOIN active_billing_invoices ON active_billing_invoices.id = active_billing_invoice_items.billing_invoice_id")
+                                    .where(active_billing_invoices: { state: state })
+                                    .select(:id))
     }
 
     def self.current_month
@@ -72,7 +73,7 @@ module ActiveBilling
     end
 
     def invoice_status
-      return I18n.t('active_billing.usage.no_invoice', default: 'No invoice') unless has_invoice?
+      return I18n.t("active_billing.usage.no_invoice", default: "No invoice") unless has_invoice?
 
       latest_invoice = invoices.order(:created_at).last
       I18n.t("active_billing.invoice.states.#{latest_invoice.state}", default: latest_invoice.state.humanize)
@@ -84,7 +85,7 @@ module ActiveBilling
       events.sum { |event| calculate_event_cost(event) }
     end
 
-    def calculate_event_cost(event)
+    def calculate_event_cost(_event)
       # Override this method in your application to calculate the cost
       # for each event type
       0.0
@@ -103,7 +104,7 @@ module ActiveBilling
       end
     end
 
-    def event_price_for(kind)
+    def event_price_for(_kind)
       # Override this method in your application to return the price
       # for each event type
       0.0

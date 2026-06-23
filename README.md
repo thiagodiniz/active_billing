@@ -2,6 +2,8 @@
 
 A Rails-focused Ruby gem for SaaS billing. ActiveBilling manages billing cycles, tracks plan-based and usage-based consumption, closes cycles, generates invoices, and records payment. It runs **embedded** inside an existing Rails application (models, controllers, jobs, helpers) or **standalone** as a thin billing service that receives input from external apps over a JSON API.
 
+> **Implementation status.** This README documents both the shipped surface and the intended design. What's implemented today: the core models (`Plan`, `Billing`, `Usage`, `Event`, `Invoice`, `InvoiceItem`, `Charge`), the polymorphic billable-entity model, `billable_entity` scoping, and a **read-only portal web UI** with **override generators** (see [Web UI](#web-ui-portal)). Still **planned**: the Billing lifecycle helpers (`close!`, `finalize!`, …), `BillingLineItem` adjustments, and the **standalone JSON API**. Planned sections below are marked as such. See [CHANGELOG.md](CHANGELOG.md) for the authoritative status.
+
 ## Core concepts
 
 The central concept is a **Billing**. A `Billing` record represents one configured billing cycle for a billable entity (a customer, organization, tenant — anything in your app you want to bill). It carries:
@@ -93,11 +95,13 @@ rails active_billing:install:migrations
 rails db:migrate
 ```
 
+The migrations enable the `pgcrypto` and `hstore` PostgreSQL extensions automatically.
+
 Requirements:
 
-- Rails 6.0+
+- Rails 6.0+ (developed/tested against Rails 8.1)
 - PostgreSQL (uses `jsonb`, `hstore`, `gen_random_uuid()`)
-- Ruby 2.7+
+- Ruby 2.7+ (developed/tested on Ruby 3.2)
 
 ## Configuration
 
@@ -118,7 +122,12 @@ ActiveBilling.configure do |config|
   # Method called on resources to resolve the billable entity
   config.billing_entity_method = :billing_entity
 
-  # Standalone mode: enable the mountable API and set auth callable
+  # Default polymorphic type used by the portal web UI when the
+  # billable_entity_type query param is omitted (e.g. "Customer", "Store").
+  config.billable_entity_class = nil
+
+  # Standalone mode (planned): enable the mountable API and set auth callable.
+  # The config keys exist today; the API controllers/serializers are not yet shipped.
   config.api_enabled    = false
   config.api_authorizer = ->(request) { ApiToken.find_by(token: request.headers["X-Api-Key"]) }
 end
@@ -152,27 +161,39 @@ end
 
 ### 2. Define a Plan
 
+The shipped `Plan` model uses `name`, `price_in_cents` (a money-typed attribute — see [Currency and money](#currency-and-money)), `interval` (`monthly`/`yearly`), `allowances` (jsonb), and `active`:
+
 ```ruby
 plan = ActiveBilling::Plan.create!(
   name: "Pro",
-  recurring_amount: 99.00,           # stored in cents
-  included_allowances: { api_call: 10_000, sms_sent: 200 },
+  price_in_cents: 9_900,                          # cents; or ActiveBilling::Money.from_amount(99.00)
+  interval: "monthly",
+  allowances: { api_call: 10_000, sms_sent: 200 },
   metadata: { tier: "pro" }
 )
+
+plan.price_in_cents        # => #<ActiveBilling::Money BRL 99.00>
+plan.price_in_cents.to_d   # => 0.99e2 (BigDecimal, exact)
+plan.price_in_cents.cents  # => 9900
 ```
 
 ### 3. Open a Billing cycle
 
+`Billing` is the connector between a billable entity and its usages/invoices/charges. It belongs to a polymorphic `billable_entity` (the payer — a chain, a store, a customer…), optionally references a `Plan` (snapshotted onto the billing while it is `open`), and has a `state` of `open`/`finalized`.
+
 ```ruby
 billing = customer.billings.create!(
   plan: plan,                                    # snapshotted onto the billing
-  cycle_start: Date.current.beginning_of_month,
-  cycle_end:   Date.current.end_of_month,
-  interval:    :monthly
+  period_start: Date.current.beginning_of_month,
+  period_end:   Date.current.end_of_month
 )
+
+ActiveBilling::Billing.current_for(customer)     # latest open billing for an entity
 ```
 
-Creating a Billing also opens a `Usage` for the cycle window.
+Because a Billing can aggregate `Usage` records from several resources, multiple stores under one chain can either be billed individually (one Billing each) or unified into a single Billing → Invoice → Charge.
+
+> **Planned:** automatically opening a `Usage` when a Billing is created, and the `close!`/`finalize!` lifecycle helpers shown below, are not yet implemented. Create and associate `Usage` records directly for now.
 
 ### 4. Record events
 
@@ -186,6 +207,8 @@ billing.usage.events.create!(
 ```
 
 ### 5. Close the cycle
+
+> **Planned.** Steps 5–7 below (`close!`, the adjustment helpers, and `finalize!`) describe the target lifecycle and are **not yet implemented**. Today, build Invoices/Charges from Usages directly.
 
 ```ruby
 billing.close!     # closes the Usage; computes usage-derived line items;
@@ -216,7 +239,49 @@ charge.mark_processing!
 charge.mark_paid!(paid_at: Time.current)
 ```
 
+## Web UI (portal)
+
+The engine ships a **read-only portal** that a host app gets for free once the engine is mounted. Every list is scoped to a billable entity via the `billable_entity_id` query param (and `billable_entity_type`, unless `config.billable_entity_class` is set). Authentication is intentionally out of scope — wrap the routes with your own app's auth.
+
+Mounted at the engine's path (e.g. `/billing`):
+
+| Route | Action | Purpose |
+| ----- | ------ | ------- |
+| `GET /invoices` | index | Invoices for the billable entity (via their Billing) |
+| `GET /invoices/:id` | show | One invoice + its items |
+| `GET /usages` | index | Usages measured for the billable entity |
+| `GET /usages/:id` | show | One usage |
+| `GET /charges` | index | Charges for the billable entity (via invoice → billing) |
+| `GET /charges/:id` | show | One charge |
+| `GET /plan` | show | The current plan for the billable entity (from its open Billing) |
+
+```
+# Invoices for store #42, rendered by the engine's own views:
+GET /billing/invoices?billable_entity_id=42&billable_entity_type=Store
+```
+
+Index actions return **400 Bad Request** when `billable_entity_id` (or a resolvable type) is missing. All user-facing strings go through `I18n.t` with English defaults in `config/locales/active_billing.en.yml`.
+
+> **Note:** the portal is read-only (`index`/`show`). Create/update/destroy and an admin UI are not part of this surface.
+
+## Overriding views and controllers
+
+The shipped views/controllers are used as-is by default. To customize them, generate local copies into your app — Rails resolves your app's `app/views` and `app/controllers` ahead of the engine's:
+
+```bash
+# Copy the portal views into app/views/active_billing/** to override the defaults:
+bin/rails generate active_billing:views
+
+# Copy the portal controllers into app/controllers/active_billing/**:
+bin/rails generate active_billing:controllers
+
+# Write a config/initializers/active_billing.rb and print setup steps:
+bin/rails generate active_billing:install
+```
+
 ## Standalone usage
+
+> **Planned.** The JSON API described in this section is **not yet implemented** — the `config.api_enabled` / `config.api_authorizer` keys exist, but the versioned controllers and serializers are on the roadmap. The example requests below document the intended contract.
 
 In standalone mode, external services interact with the engine over JSON. All endpoints are prefixed by the mount path (`/billing` below) and require the configured API auth header.
 
@@ -247,7 +312,9 @@ Embedded callers get the same behavior by calling the model methods directly; st
 
 ## Payments
 
-ActiveBilling v1 ships the **Charge state machine** (`created → processing → paid / failed / expired`) and an extension surface for payment providers, but it does **not** ship a Stripe/Pagar.me/etc. adapter. Wire your own provider via callbacks:
+> **Status.** `Charge` currently ships as a payment **record** (polymorphic `payer`/`resource`, optional `invoice`, default penalty/interest, `for_billable_entity` scope). The full **state machine** (`created → processing → paid / failed / expired`) and the `after_paid`-style callbacks below are **planned**.
+
+ActiveBilling aims to ship the **Charge state machine** (`created → processing → paid / failed / expired`) and an extension surface for payment providers, but it does **not** ship a Stripe/Pagar.me/etc. adapter. Wire your own provider via callbacks:
 
 ```ruby
 ActiveBilling::Charge.after_create :send_to_gateway
@@ -258,15 +325,22 @@ A pluggable provider interface (with a Stripe reference implementation) is on th
 
 ## Currency and money
 
-All monetary values are stored as integer cents. The `CurrencyAttribute` concern adds a decimal accessor pair:
+All monetary values are stored as integer cents. The `*_in_cents` columns use a custom ActiveRecord attribute type (`ActiveBilling::Type::Money`, registered as `:active_billing_money`) that casts them to an immutable `ActiveBilling::Money` value object:
 
 ```ruby
-invoice.amount = 99.99
-invoice.amount_in_cents   # => 9999
-invoice.amount            # => 99.99
+attribute :amount_in_cents, :active_billing_money   # declared on the model
+
+invoice.amount_in_cents = 9_999          # assign cents…
+invoice.amount_in_cents = ActiveBilling::Money.from_amount(99.99)  # …or from major units
+invoice.amount_in_cents                  # => #<ActiveBilling::Money BRL 99.99>
+invoice.amount_in_cents.cents            # => 9999
+invoice.amount_in_cents.to_d             # => 0.9999e2 (BigDecimal — exact, not Float)
+invoice.amount_in_cents.as_json          # => 9999  (stable integer serialization)
 ```
 
-Default currency is configured globally (`ActiveBilling.configuration.currency`) and can be overridden per Billing.
+`Money` is `Comparable`, supports `+`/`-`, and serializes to integer cents — so validations (`comparison: { greater_than: 0 }`), JSON, and database round-trips stay exact. This replaced the earlier `CurrencyAttribute` concern; using a real type means casting/serialization is handled by Rails' attributes API instead of generated accessor methods.
+
+Default currency is configured globally (`ActiveBilling.configuration.currency`) and used when building `Money` values.
 
 ## Brazilian invoicing (NFe)
 
@@ -290,11 +364,12 @@ end
 
 Common extension points:
 
-- `Billing#event_price_for(kind)` — per-event pricing
-- `Billing#calculate_event_cost(event)` — per-event cost calculation
-- `Billing#close!` / `Billing#finalize!` — override or wrap with `super`
-- `Charge` callbacks — payment-provider integration
+- `Usage#event_price_for(kind)` — per-event pricing (override in your app; defaults to `0.0`)
+- `Usage#calculate_event_cost(event)` — per-event cost calculation (override; defaults to `0.0`)
+- `Usage#calculate_total_cost` — total cost across events
+- `Charge#billing_entity` — return the entity that receives payments (must be overridden)
 - Custom `Event.kinds` entries — your own billable verbs
+- `Billing#close!` / `Billing#finalize!` — _planned_ lifecycle hooks
 
 ## Database schema
 

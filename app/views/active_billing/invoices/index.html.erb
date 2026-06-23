@@ -1,0 +1,28 @@
+<h1><%= t("active_billing.invoice.index_title", default: "Invoices") %></h1>
+
+<% if @invoices.empty? %>
+  <p><%= t("active_billing.invoice.empty", default: "No invoices for this billable entity.") %></p>
+<% else %>
+  <table class="active-billing-table">
+    <thead>
+      <tr>
+        <th><%= t("active_billing.invoice.uuid", default: "Reference") %></th>
+        <th><%= t("active_billing.invoice.state", default: "State") %></th>
+        <th><%= t("active_billing.invoice.amount", default: "Amount") %></th>
+        <th><%= t("active_billing.invoice.issued_at", default: "Issued at") %></th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @invoices.each do |invoice| %>
+        <tr>
+          <td><%= invoice.uuid %></td>
+          <td><%= t("active_billing.invoice.states.#{invoice.state}", default: invoice.state.humanize) %></td>
+          <td><%= format_cents(invoice.amount_in_cents) %></td>
+          <td><%= invoice.issued_at %></td>
+          <td><%= link_to t("active_billing.show", default: "View"), invoice_path(invoice, current_scope_params) %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>
