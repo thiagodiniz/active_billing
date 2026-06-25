@@ -1,0 +1,34 @@
+AllCops:
+  NewCops: disable
+  SuggestExtensions: false
+  TargetRubyVersion: 3.2
+  Exclude:
+    - "db/**/*"
+    - "test/dummy/**/*"
+    - "bin/**/*"
+    - "vendor/**/*"
+    - "lib/generators/**/templates/**/*"
+
+# Project conventions (see CLAUDE.md):
+# double quotes for all strings, no frozen string literal comments.
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+Style/FrozenStringLiteralComment:
+  Enabled: false
+
+# Code is self-documenting; top-level class docs are not used.
+Style/Documentation:
+  Enabled: false
+
+# CLAUDE.md mandates the -> lambda literal for scopes.
+Style/Lambda:
+  EnforcedStyle: literal
+
+Metrics/MethodLength:
+  Max: 30
+
+Metrics/BlockLength:
+  Exclude:
+    - "spec/**/*"
+    - "config/routes.rb"

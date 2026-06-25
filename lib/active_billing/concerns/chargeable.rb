@@ -9,7 +9,7 @@ module ActiveBilling
       included do
         include Discard::Model
 
-        has_one :charge, as: :chargeable, touch: true, class_name: 'ActiveBilling::Charge'
+        has_one :charge, as: :chargeable, touch: true, class_name: "ActiveBilling::Charge"
         has_one :gateway_wallet, through: :charge
 
         delegate :gateway_metadata, :expired?, :created?, :charged?, :paid_at, :paid?, :pending?,

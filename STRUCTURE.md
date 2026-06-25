@@ -2,6 +2,8 @@
 
 This document describes the file structure of the ActiveBilling gem.
 
+> **Legend.** Entries marked **(planned)** describe files that are part of the intended design but are **not yet present** in the repository. Everything else exists today.
+
 ## Directory layout
 
 ```
@@ -28,54 +30,79 @@ active_billing/
 │   │   │
 │   │   ├── concerns/                # Shared model behaviors
 │   │   │   ├── chargeable.rb        # Payment-related behavior
-│   │   │   ├── currency_attribute.rb # Money handling (cents ↔ decimal)
 │   │   │   ├── nfe_description.rb   # Brazilian fiscal invoice description (opt-in)
 │   │   │   └── timestamp_store_accessor.rb  # Email tracking via hstore
 │   │   │
-│   │   └── models/                  # Core domain models
-│   │       ├── plan.rb              # Plan catalog
-│   │       ├── billing.rb           # Configured billing cycle (new central model)
-│   │       ├── billing_line_item.rb # Adjustments applied to a Billing
-│   │       ├── usage.rb             # Per-period measurement bucket
-│   │       ├── event.rb             # Append-only billable events
-│   │       ├── invoice.rb           # Invoice document with state machine
-│   │       ├── invoice_item.rb      # Invoice line items
-│   │       └── charge.rb            # Payment record + state machine
+│   │   ├── money.rb                 # Money value object (cents + currency)
+│   │   ├── type/
+│   │   │   └── money.rb             # ActiveRecord type for `*_in_cents` columns
+│   │   │
+│   │   ├── models/                  # Core domain models (Zeitwerk-autoloaded by the engine)
+│   │   │   ├── plan.rb              # Plan catalog (name, price, interval, allowances)
+│   │   │   ├── billing.rb           # Billing cycle / connector for a billable entity
+│   │   │   ├── billing_line_item.rb # Adjustments applied to a Billing  (planned)
+│   │   │   ├── usage.rb             # Per-period measurement bucket
+│   │   │   ├── event.rb             # Append-only billable events
+│   │   │   ├── invoice.rb           # Invoice document with state machine
+│   │   │   ├── invoice_item.rb      # Invoice line items
+│   │   │   └── charge.rb            # Payment record
+│   │   │
+│   │   └── generators/              # Override generators (copy engine files into host app)
+│   │       └── active_billing/
+│   │           ├── views/           # rails g active_billing:views
+│   │           ├── controllers/     # rails g active_billing:controllers
+│   │           └── install/         # rails g active_billing:install (+ templates/)
 │   │
 │   └── tasks/
 │       └── active_billing_tasks.rake # Rake tasks (install migrations, close cycles, …)
 │
-├── app/                             # Standalone-mode engine code
+├── app/                             # Engine app code
 │   ├── controllers/
 │   │   └── active_billing/
-│   │       └── api/
+│   │       ├── application_controller.rb
+│   │       ├── portal_controller.rb        # Base: resolves billable_entity_id/type
+│   │       ├── invoices_controller.rb      # Portal: index + show
+│   │       ├── usages_controller.rb        # Portal: index + show
+│   │       ├── charges_controller.rb       # Portal: index + show
+│   │       ├── plans_controller.rb         # Portal: show (current plan)
+│   │       └── api/                        # Standalone JSON API  (planned)
 │   │           └── v1/
 │   │               ├── base_controller.rb
 │   │               ├── billings_controller.rb
 │   │               ├── events_controller.rb
 │   │               ├── invoices_controller.rb
 │   │               └── plans_controller.rb
-│   └── serializers/
+│   ├── helpers/
+│   │   └── active_billing/
+│   │       └── application_helper.rb       # format_cents, etc.
+│   ├── views/
+│   │   ├── active_billing/                 # Portal views (invoices/usages/charges/plans/shared)
+│   │   └── layouts/active_billing/
+│   └── serializers/                        # JSON serializers  (planned)
 │       └── active_billing/
-│           ├── billing_serializer.rb
-│           ├── invoice_serializer.rb
-│           ├── charge_serializer.rb
-│           └── plan_serializer.rb
 │
 ├── config/
-│   └── routes.rb                    # Engine routes (mounted under host app's mount path)
+│   ├── routes.rb                    # Engine routes (portal resources)
+│   └── locales/
+│       └── active_billing.en.yml    # I18n strings for models + portal
 │
 ├── db/
 │   └── migrate/
 │       ├── 20260101000001_create_active_billing_tables.rb
-│       └── 20260101000002_create_active_billing_billings_and_plans.rb
+│       ├── 20260615000001_create_active_billing_plans.rb
+│       ├── 20260615000002_create_active_billing_billings.rb
+│       └── 20260615000003_add_billing_to_usages_and_invoices.rb
 │
-└── spec/                            # RSpec test suite
-    ├── spec_helper.rb
-    ├── models/
-    ├── concerns/
-    ├── requests/                    # Standalone API tests
-    └── support/
+├── spec/                            # RSpec test suite
+│   ├── spec_helper.rb
+│   ├── rails_helper.rb
+│   ├── factories/
+│   ├── models/active_billing/
+│   ├── requests/active_billing/
+│   └── routing/active_billing/
+│
+└── test/
+    └── dummy/                        # Dummy Rails app used by the specs (incl. a Store model)
 ```
 
 ## Key files
@@ -89,50 +116,67 @@ active_billing/
 
 ### Core models
 
-Located in `lib/active_billing/models/`:
+Located in `lib/active_billing/models/` and autoloaded by the engine (Zeitwerk `push_dir` under the `ActiveBilling` namespace):
 
-1. **plan.rb** — catalog entry: recurring price + included allowances
-2. **billing.rb** — one configured billing cycle for a billable entity; snapshots a Plan; aggregates Usages + adjustments
-3. **billing_line_item.rb** — line items added to a Billing (manual items, credits, discounts)
-4. **usage.rb** — per-period measurement bucket; closes at cycle end, then immutable
+1. **plan.rb** — catalog entry: `name`, `price`/`price_in_cents`, `interval`, `allowances`, `active`
+2. **billing.rb** — one billing cycle for a billable entity; snapshots a Plan; aggregates Usages (the connector that lets several resources share one Invoice/Charge)
+3. **billing_line_item.rb** — line items added to a Billing (manual items, credits, discounts) — **(planned)**
+4. **usage.rb** — per-period measurement bucket; `for_billable_entity` scope; pricing hooks
 5. **event.rb** — append-only billable events recorded against a Usage
-6. **invoice.rb** — document produced when a Billing finalizes; state machine
+6. **invoice.rb** — document with a state machine; `belongs_to :billing`; `for_billable_entity` scope
 7. **invoice_item.rb** — line items owned by an Invoice
-8. **charge.rb** — payment record with its own state machine
+8. **charge.rb** — payment record; `for_billable_entity` scope (full state machine **planned**)
 
 ### Concerns
 
 Located in `lib/active_billing/concerns/`:
 
 1. **chargeable.rb** — payment-related associations + scopes
-2. **currency_attribute.rb** — `currency_attrs :amount` macro (cents ↔ decimal)
-3. **nfe_description.rb** — Brazilian fiscal invoice description (opt-in)
-4. **timestamp_store_accessor.rb** — email tracking timestamps in hstore
+2. **nfe_description.rb** — Brazilian fiscal invoice description (opt-in)
+3. **timestamp_store_accessor.rb** — email tracking timestamps in hstore
 
-### Engine (standalone mode)
+### Money type
+
+Monetary values use a custom ActiveRecord attribute type rather than a concern:
+
+1. **lib/active_billing/money.rb** — `ActiveBilling::Money` value object (integer cents + currency; `Comparable`, `to_d`, `as_json` → cents)
+2. **lib/active_billing/type/money.rb** — `ActiveBilling::Type::Money`, registered as `:active_billing_money` and applied to the `*_in_cents` columns via `attribute :amount_in_cents, :active_billing_money`
+
+### Engine — portal web UI
 
 Located under `app/`:
 
-- **controllers/active_billing/api/v1/** — versioned JSON controllers; require `config.api_enabled = true` and a `config.api_authorizer` callable
-- **serializers/active_billing/** — JSON serialization of the public surface
-- **config/routes.rb** — mounted by the host app via `mount ActiveBilling::Engine => "/billing"`
+- **controllers/active_billing/** — `portal_controller.rb` (base; resolves `billable_entity_id`/`type`) and the read-only `invoices`, `usages`, `charges` (`index`+`show`) and `plans` (`show`) controllers
+- **views/active_billing/** — ERB views for the portal, plus `layouts/active_billing/application.html.erb`
+- **helpers/active_billing/application_helper.rb** — view helpers (e.g. `format_cents`)
+- **config/routes.rb** — portal resources, mounted by the host app via `mount ActiveBilling::Engine => "/billing"`
+- **config/locales/active_billing.en.yml** — I18n strings
 
-In embedded mode, the engine is loaded but its controllers refuse requests unless `api_enabled` is true. In standalone mode, the engine is the entire HTTP surface.
+### Override generators
+
+Located under `lib/generators/active_billing/`:
+
+- **views/** — `rails g active_billing:views` copies the portal views into the host app
+- **controllers/** — `rails g active_billing:controllers` copies the portal controllers
+- **install/** — `rails g active_billing:install` writes a config initializer (template under `install/templates/`) and prints setup steps
+
+### Engine (standalone JSON API) — planned
+
+- **controllers/active_billing/api/v1/** — versioned JSON controllers; would require `config.api_enabled = true` and a `config.api_authorizer` callable
+- **serializers/active_billing/** — JSON serialization of the public surface
+
+These are part of the intended design and are **not yet implemented**.
 
 ### Database
 
-`db/migrate/` ships migrations for all tables:
+`db/migrate/` ships migrations for these tables:
 
-- `active_billing_plans`
-- `active_billing_billings`
-- `active_billing_billing_line_items`
-- `active_billing_usages`
-- `active_billing_events`
-- `active_billing_invoices`
-- `active_billing_invoice_items`
-- `active_billing_charges`
+- `active_billing_charges`, `active_billing_usages`, `active_billing_events`, `active_billing_invoices`, `active_billing_invoice_items` (initial migration)
+- `active_billing_plans` and `active_billing_billings` (added this release)
+- `billing_id` columns added to `active_billing_usages` and `active_billing_invoices`
+- `active_billing_billing_line_items` — **(planned)**
 
-All tables use UUID secondary keys (`gen_random_uuid()`), `jsonb` for metadata, and `hstore` where key/value tracking is useful.
+The initial migration enables the `pgcrypto` and `hstore` extensions. All tables use UUID secondary keys (`gen_random_uuid()`), `jsonb` for metadata, and `hstore` where key/value tracking is useful.
 
 ### Documentation
 
@@ -148,8 +192,10 @@ All tables use UUID secondary keys (`gen_random_uuid()`), `jsonb` for metadata, 
 `lib/tasks/active_billing_tasks.rake`:
 
 - `active_billing:install:migrations` — copy migrations into host app
-- `active_billing:cycles:close` — close all due cycles (intended for cron / scheduler)
-- `active_billing:cycles:finalize` — finalize closed Billings ready for invoicing
+- `active_billing:cycles:close` — close all due cycles (intended for cron / scheduler) — **(planned)**
+- `active_billing:cycles:finalize` — finalize closed Billings ready for invoicing — **(planned)**
+
+The engine also provides Rails generators (`active_billing:views`, `active_billing:controllers`, `active_billing:install`) for overriding the portal — see the generators section above.
 
 ## Install modes
 
@@ -157,10 +203,10 @@ All tables use UUID secondary keys (`gen_random_uuid()`), `jsonb` for metadata, 
 
 1. Add `gem "active_billing"` to host Gemfile
 2. Run migrations
-3. Use the models directly: `Customer#billings`, `ActiveBilling::Plan.create!`, `billing.close!`, etc.
-4. Leave `config.api_enabled = false` (default)
+3. Use the models directly: `Customer#billings`, `ActiveBilling::Plan.create!`, `ActiveBilling::Billing.current_for(entity)`, etc. (lifecycle helpers like `billing.close!` are **planned**)
+4. Optionally mount the engine to get the read-only [portal web UI](README.md#web-ui-portal)
 
-### Standalone
+### Standalone (planned)
 
 1. Create a thin Rails app
 2. Add `gem "active_billing"` and any provider/auth gems
@@ -168,7 +214,7 @@ All tables use UUID secondary keys (`gen_random_uuid()`), `jsonb` for metadata, 
 4. Set `config.api_enabled = true` and provide `config.api_authorizer`
 5. External products call the JSON API; the engine drives the same domain models
 
-Both modes are first-class. The standalone API is a thin transport layer over the embedded model API — every endpoint maps to a method on a model.
+The standalone JSON API is part of the intended design and is **not yet implemented**. The mountable engine and the portal UI work today.
 
 ## Dependencies
 
@@ -188,11 +234,12 @@ Both modes are first-class. The standalone API is a thin transport layer over th
 
 You can extend ActiveBilling by:
 
-1. **Subclassing** `ActiveBilling::Billing` / `ActiveBilling::Plan` to add domain behavior
-2. **Overriding** `event_price_for`, `calculate_event_cost`, `close!`, `finalize!`
-3. **Adding** custom event kinds (`ActiveBilling::Event.kinds.merge!(...)`)
+1. **Overriding** `Usage#event_price_for`, `Usage#calculate_event_cost`, `Charge#billing_entity`
+2. **Adding** custom event kinds via the `Event` enum
+3. **Generating** local copies of the portal views/controllers (`active_billing:views` / `:controllers`) to customize the UI
 4. **Hooking** Charge callbacks for payment-provider integration
-5. **Serving** standalone webhooks (roadmap) for `cycle.closed`, `invoice.issued`, `charge.paid`
+5. **Overriding** `Billing#close!` / `Billing#finalize!` — _planned_ lifecycle hooks
+6. **Serving** standalone webhooks for `cycle.closed`, `invoice.issued`, `charge.paid` — _planned_
 
 ## Testing
 

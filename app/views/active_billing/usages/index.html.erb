@@ -1,0 +1,26 @@
+<h1><%= t("active_billing.usage.index_title", default: "Usages") %></h1>
+
+<% if @usages.empty? %>
+  <p><%= t("active_billing.usage.empty", default: "No usages for this billable entity.") %></p>
+<% else %>
+  <table class="active-billing-table">
+    <thead>
+      <tr>
+        <th><%= t("active_billing.usage.month", default: "Month") %></th>
+        <th><%= t("active_billing.usage.total_cost", default: "Total cost") %></th>
+        <th><%= t("active_billing.usage.invoice_status", default: "Invoice") %></th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @usages.each do |usage| %>
+        <tr>
+          <td><%= usage.month %></td>
+          <td><%= format_cents(usage.total_cost_in_cents) %></td>
+          <td><%= usage.invoice_status %></td>
+          <td><%= link_to t("active_billing.show", default: "View"), usage_path(usage, current_scope_params) %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>

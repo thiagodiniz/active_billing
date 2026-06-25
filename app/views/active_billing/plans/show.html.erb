@@ -1,0 +1,32 @@
+<h1><%= t("active_billing.plan.show_title", default: "Current plan") %></h1>
+
+<% if @billing.nil? %>
+  <p><%= t("active_billing.plan.no_billing", default: "No active billing cycle for this billable entity.") %></p>
+<% elsif @plan.nil? && @billing.plan_name.blank? %>
+  <p><%= t("active_billing.plan.no_plan", default: "No plan is assigned to the current billing cycle.") %></p>
+<% else %>
+  <dl class="active-billing-details">
+    <dt><%= t("active_billing.plan.name", default: "Plan") %></dt>
+    <dd><%= @plan&.name || @billing.plan_name %></dd>
+
+    <dt><%= t("active_billing.plan.price", default: "Price") %></dt>
+    <dd><%= format_cents(@plan&.price_in_cents || @billing.plan_price_in_cents) %></dd>
+
+    <dt><%= t("active_billing.plan.interval", default: "Interval") %></dt>
+    <dd><%= @plan&.interval %></dd>
+
+    <dt><%= t("active_billing.plan.allowances", default: "Allowances") %></dt>
+    <dd>
+      <% allowances = (@plan&.allowances.presence || @billing.plan_allowances) || {} %>
+      <% if allowances.empty? %>
+        —
+      <% else %>
+        <ul>
+          <% allowances.each do |key, value| %>
+            <li><%= key %>: <%= value %></li>
+          <% end %>
+        </ul>
+      <% end %>
+    </dd>
+  </dl>
+<% end %>

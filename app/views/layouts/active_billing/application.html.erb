@@ -1,15 +1,32 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Abs scaffold</title>
+  <title><%= t("active_billing.title", default: "Billing") %></title>
   <%= csrf_meta_tags %>
   <%= csp_meta_tag %>
 
-  <%= stylesheet_link_tag    "active_billing/application", media: "all" %>
+  <%= stylesheet_link_tag "active_billing/application", media: "all" %>
 </head>
-<body>
+<body class="active-billing">
+  <nav class="active-billing-nav">
+    <% if respond_to?(:current_scope_params) && current_scope_params[:billable_entity_id].present? %>
+      <%= link_to t("active_billing.nav.invoices", default: "Invoices"), invoices_path(current_scope_params) %>
+      <%= link_to t("active_billing.nav.usages", default: "Usages"), usages_path(current_scope_params) %>
+      <%= link_to t("active_billing.nav.charges", default: "Charges"), charges_path(current_scope_params) %>
+      <%= link_to t("active_billing.nav.plan", default: "Plan"), plan_path(current_scope_params) %>
+    <% end %>
+  </nav>
 
-<%= yield %>
+  <% if flash.any? %>
+    <div class="active-billing-flash">
+      <% flash.each do |type, message| %>
+        <p class="flash-<%= type %>"><%= message %></p>
+      <% end %>
+    </div>
+  <% end %>
 
+  <main>
+    <%= yield %>
+  </main>
 </body>
 </html>

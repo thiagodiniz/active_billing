@@ -2,6 +2,8 @@
 
 This document describes the architecture and design decisions behind ActiveBilling.
 
+> **Implementation status.** This document describes the target architecture. Implemented today: the domain models (`Plan`, `Billing`, `Usage`, `Event`, `Invoice`, `InvoiceItem`, `Charge`), the polymorphic billable-entity design, `for_billable_entity` scoping, and the read-only **portal web UI** with override generators. **Planned** (marked inline): the Billing lifecycle helpers (`close!`/`finalize!`), `BillingLineItem`, the full `Charge` state machine, and the standalone **JSON API**.
+
 ## Overview
 
 ActiveBilling is a Rails engine gem that models the full SaaS billing lifecycle: configured **billing cycles**, **plan-based and usage-based** consumption, **cycle close**, **invoice** generation, and **payment** state. It is designed to run in two modes from a single codebase:
@@ -17,12 +19,13 @@ Both modes share the same domain model and lifecycle. Standalone is the embedded
 
 A `Billing` represents **one configured billing cycle for one billable entity**. It carries:
 
-- the cycle window (`cycle_start`, `cycle_end`) and `interval` (monthly, weekly, or custom)
-- a **snapshot** of the attached `Plan` (so plan catalog edits never rewrite past Billings)
-- references to one or more closed `Usage` records measured during the cycle
-- a collection of `BillingLineItem` adjustments (extra items, credits, discounts) added between close and finalize
+- the cycle window (`period_start`, `period_end`)
+- a **snapshot** of the attached `Plan` (`plan_name`, `plan_price_in_cents`, `plan_allowances`) so plan catalog edits never rewrite past Billings
+- references to one or more `Usage` records measured during the cycle (`has_many :usages`)
+- a `state` of `open`/`finalized`
+- _(planned)_ a collection of `BillingLineItem` adjustments (extra items, credits, discounts) added between close and finalize
 
-A Billing is mutable until it is finalized. Finalization produces an `Invoice`.
+A Billing is mutable until it is finalized. Finalization is intended to produce an `Invoice` (the `finalize!` helper is planned).
 
 ### Usage — the measurement
 
@@ -35,11 +38,11 @@ Usage and Billing are intentionally separate:
 
 ### Plan
 
-`Plan` is a catalog model owned by the gem: recurring price + included allowances + metadata. When a Billing references a Plan, the Plan's relevant fields are **snapshotted** onto the Billing (`plan_name`, `plan_amount_in_cents`, `plan_allowances`, etc.). Future edits to the Plan catalog do not retroactively change past Billings.
+`Plan` is a catalog model owned by the gem: `name`, `price`/`price_in_cents`, `interval` (`monthly`/`yearly`), `allowances`, `active`, and metadata. When a Billing references a Plan, the Plan's relevant fields are **snapshotted** onto the Billing (`plan_name`, `plan_price_in_cents`, `plan_allowances`) on validation while the Billing is `open`. Future edits to the Plan catalog do not retroactively change past Billings.
 
 ### Invoice and Charge
 
-The Invoice is the finalized, immutable billing document. The Charge is the payment record attached to it, with its own state machine (`created → processing → paid / failed / expired`). v1 ships the Charge state machine and callback hooks; payment-provider adapters (Stripe, Pagar.me, etc.) are roadmap.
+The Invoice is the finalized billing document, with a working state machine (`created → processing → issued → cancelled / failed`). The Charge is the payment record attached to it. Today `Charge` ships as a record (payer/resource, optional invoice, penalty/interest, `for_billable_entity` scope); its full state machine (`created → processing → paid / failed / expired`), callback hooks, and payment-provider adapters (Stripe, Pagar.me, etc.) are roadmap.
 
 ## Lifecycle
 
@@ -61,6 +64,8 @@ The Invoice is the finalized, immutable billing document. The Charge is the paym
 ## Data model
 
 ### Entity relationship diagram
+
+> The diagram shows the target design. In the **implemented** models, `Plan` uses `price_in_cents`/`allowances` (not `recurring_amount`/`included_allowances`), `Billing` uses `period_start`/`period_end` and `state` is `open`/`finalized`, and `BillingLineItem` is planned.
 
 ```
 ┌─────────────────────────┐
@@ -113,7 +118,7 @@ The Invoice is the finalized, immutable billing document. The Charge is the paym
 
 ### Snapshot, don't reference
 
-The Plan attached to a Billing is *snapshotted*. The Billing holds its own copy of `plan_name`, `plan_amount_in_cents`, and `plan_allowances`. This protects historical Billings from catalog edits and keeps audits straightforward.
+The Plan attached to a Billing is *snapshotted*. The Billing holds its own copy of `plan_name`, `plan_price_in_cents`, and `plan_allowances`. This protects historical Billings from catalog edits and keeps audits straightforward.
 
 ### Two-phase consumption
 
@@ -129,10 +134,13 @@ Usage is the **measurement** phase (immutable once closed). Billing is the **ass
 
 ### Concerns for cross-cutting behavior
 
-- `CurrencyAttribute` — `currency_attrs :amount` creates the cents/decimal accessor pair
 - `Chargeable` — payment-related associations and scopes
 - `TimestampStoreAccessor` — email tracking timestamps in `hstore`
 - `NfeDescription` — opt-in Brazilian fiscal invoice description support
+
+### Money as a custom attribute type
+
+Monetary columns (`*_in_cents`) are mapped with a custom ActiveRecord type, `ActiveBilling::Type::Money` (registered as `:active_billing_money`), rather than a concern. The type casts the integer column to an immutable `ActiveBilling::Money` value object (cents + currency) and serializes it back to integer cents for the database and JSON. This keeps money exact (BigDecimal, never Float), centralizes casting/serialization in Rails' attributes API, and lets validations use value-object comparisons (`comparison: { greater_than: 0 }`). It replaced the earlier `CurrencyAttribute` concern, which generated cents/decimal accessor pairs via `define_method`.
 
 ### State machines via string-backed enums
 
@@ -145,23 +153,37 @@ Charge:   created   → processing → paid / failed / expired
 
 Transitions are guarded by `validate` methods, not by external state-machine gems.
 
+## Billing as the resource ↔ billable-entity connector
+
+`Billing` is what links the *thing being measured* to the *party that pays*. `Usage` records carry their own polymorphic `billable_entity` (e.g. an individual store), while `Billing` carries the polymorphic `billable_entity` of the payer (which may be that same store, or a parent like a chain). Because a `Billing` `has_many :usages` and `has_many :invoices`, several stores' usages can roll up into **one** Billing → Invoice → Charge (unified billing), or each store can keep its own Billing (per-store billing). This is why `Invoice` and `Charge` reach a billable entity *through* their `Billing` (`for_billable_entity` joins `active_billing_billings`), while `Usage` filters on its own columns.
+
+## Web UI (portal)
+
+The engine ships a small **read-only** web surface used directly when the engine is mounted:
+
+- `PortalController` resolves the billable entity from `billable_entity_id` + `billable_entity_type` (the latter defaulting to `config.billable_entity_class`), and returns 400 on `index` when it is missing.
+- `Invoices`/`Usages`/`Charges` expose `index` + `show`; `Plans` exposes `show` (the current plan from the entity's open `Billing`).
+- Views are plain ERB resolved from the engine's view path. Hosts override them by generating local copies (`active_billing:views` / `active_billing:controllers`), which Rails resolves ahead of the engine's.
+
+Authentication is deliberately left to the host app. An authenticated admin UI is not part of this surface.
+
 ## Two-mode architecture
 
 ### Embedded mode
 
-The host Rails app `require`s the gem, mounts nothing, and calls `ActiveBilling::Billing.create!`, `billing.close!`, etc. directly. All controllers/jobs/views are owned by the host.
+The host Rails app `require`s the gem and calls `ActiveBilling::Billing.create!`, `ActiveBilling::Billing.current_for(entity)`, etc. directly, and may mount the engine for the read-only portal. (Lifecycle helpers like `billing.close!` are **planned**.)
 
-### Standalone mode
+### Standalone mode — planned
 
-The same gem ships:
+The intended design ships:
 
-- a Rails engine (`ActiveBilling::Engine`) mountable at any path
-- versioned JSON controllers under `ActiveBilling::Api::V1::*`
-- a token auth contract (`config.api_authorizer` resolves the request to an authorized caller)
-- serializers for the public surface (Plan, Billing, Invoice, Charge)
-- webhooks (roadmap) for "cycle closed", "invoice issued", "charge paid"
+- a Rails engine (`ActiveBilling::Engine`) mountable at any path — **implemented** (currently serves the portal)
+- versioned JSON controllers under `ActiveBilling::Api::V1::*` — **planned**
+- a token auth contract (`config.api_authorizer` resolves the request to an authorized caller) — config key exists; enforcement **planned**
+- serializers for the public surface (Plan, Billing, Invoice, Charge) — **planned**
+- webhooks for "cycle closed", "invoice issued", "charge paid" — **planned**
 
-The standalone API is a thin transport layer over the embedded model API — every endpoint maps to a method call on a domain model. There is no parallel implementation.
+The standalone API is intended as a thin transport layer over the embedded model API — every endpoint maps to a method call on a domain model.
 
 ### Configuration
 
@@ -256,7 +278,7 @@ For very high event volumes, denormalize per-kind counts onto Usage and update t
 ## Security considerations
 
 - **Data integrity** — closed Usage is immutable; finalized Billing is immutable; invoice items are owned by Invoice.
-- **Monetary precision** — all money stored as integer cents; decimal accessors only at boundaries.
+- **Monetary precision** — all money stored as integer cents; exposed as `ActiveBilling::Money` value objects (BigDecimal-backed) via a custom attribute type.
 - **Idempotency** — every Billing/Invoice/Charge carries a UUID; standalone endpoints accept an `Idempotency-Key` header (roadmap).
 - **API auth** — standalone mode requires `config.api_authorizer` to be set; the engine refuses requests otherwise.
 

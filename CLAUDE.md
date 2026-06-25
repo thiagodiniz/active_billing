@@ -60,7 +60,7 @@ bundle exec rake db:migrate # Run migrations (test app)
 - One class per file under `lib/active_billing/models/` and `lib/active_billing/concerns/`
 - All models inherit from `ActiveRecord::Base`
 - Concerns use `extend ActiveSupport::Concern` with `included do` blocks
-- Namespace everything under `ActiveBilling::` (e.g. `ActiveBilling::Concerns::CurrencyAttribute`)
+- Namespace everything under `ActiveBilling::` (e.g. `ActiveBilling::Concerns::Chargeable`, `ActiveBilling::Type::Money`)
 - Composition over inheritance — use concerns and polymorphic associations, not deep class hierarchies
 
 ### Models — Internal Block Ordering
@@ -70,7 +70,7 @@ Every model must follow this strict top-to-bottom ordering. Separate each sectio
 ```ruby
 class Invoice < ActiveRecord::Base
   # 1. Includes (concerns, modules)
-  include ActiveBilling::Concerns::CurrencyAttribute
+  include ActiveBilling::Concerns::TimestampStoreAccessor
   include ActiveBilling::Concerns::Chargeable
 
   # 2. Constants
@@ -79,12 +79,12 @@ class Invoice < ActiveRecord::Base
   # 3. Parameterless macros (gems that hook into the model)
   has_paper_trail
 
-  # 4. Attribute macros (attr_accessor, store_accessor, currency_attrs, etc.)
+  # 4. Attribute macros (attr_accessor, store_accessor, attribute types, etc.)
   attr_accessor :skip_validation
 
   timestamp_store_accessor :email_timestamps
 
-  currency_attrs :amount
+  attribute :amount_in_cents, :active_billing_money
 
   # 5. Associations — in this order: belongs_to, has_one, has_many, HABTM, others
   #    Use blank lines to group semantically related associations
@@ -164,10 +164,10 @@ end
 
 ### Concerns (Metaprogramming Patterns)
 
-- `define_method` for dynamic attribute getters/setters (CurrencyAttribute)
 - `class_eval` for dynamic scope generation (Chargeable)
 - `store_accessor` for hstore fields (TimestampStoreAccessor)
 - Keep metaprogramming in concerns, not in models
+- Prefer a custom `ActiveRecord::Type` over accessor-generating concerns for value casting/serialization (e.g. `ActiveBilling::Type::Money` for `*_in_cents` columns)
 
 ### Configuration
 

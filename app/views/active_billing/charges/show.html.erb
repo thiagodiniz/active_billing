@@ -1,0 +1,23 @@
+<h1><%= t("active_billing.charge.show_title", default: "Charge") %> <%= @charge.uuid %></h1>
+
+<dl class="active-billing-details">
+  <dt><%= t("active_billing.charge.invoice", default: "Invoice") %></dt>
+  <dd>
+    <% if @charge.invoice %>
+      <%= link_to @charge.invoice.uuid, invoice_path(@charge.invoice, current_scope_params) %>
+    <% else %>
+      —
+    <% end %>
+  </dd>
+
+  <dt><%= t("active_billing.charge.default_penalty", default: "Penalty") %></dt>
+  <dd><%= format_cents(@charge.default_penalty) %></dd>
+
+  <dt><%= t("active_billing.charge.default_interest", default: "Interest") %></dt>
+  <dd><%= format_cents(@charge.default_interest) %></dd>
+
+  <dt><%= t("active_billing.charge.created_at", default: "Created at") %></dt>
+  <dd><%= @charge.created_at %></dd>
+</dl>
+
+<p><%= link_to t("active_billing.back", default: "Back"), charges_path(current_scope_params) %></p>

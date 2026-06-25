@@ -1,26 +1,24 @@
 module ActiveBilling
   class Event < ActiveRecord::Base
-    self.table_name = 'active_billing_events'
-
     belongs_to :resource, polymorphic: true
     belongs_to :resource_with_discarded, -> { with_discarded },
                polymorphic: true,
-               foreign_key: 'resource_id',
-               foreign_type: 'resource_type',
+               foreign_key: "resource_id",
+               foreign_type: "resource_type",
                optional: true
-    belongs_to :usage, class_name: 'ActiveBilling::Usage',
-               foreign_key: 'billing_usage_id',
-               inverse_of: :events
+    belongs_to :usage, class_name: "ActiveBilling::Usage",
+                       foreign_key: "billing_usage_id",
+                       inverse_of: :events
 
     enum :kind, {
-      subscription_active: 'subscription_active',
-      charge_paid: 'charge_paid',
-      charge_cancelled: 'charge_cancelled',
-      sms_sent: 'sms_sent',
-      email_sent: 'email_sent',
-      api_call: 'api_call',
-      storage_used: 'storage_used',
-      custom_event: 'custom_event'
+      subscription_active: "subscription_active",
+      charge_paid: "charge_paid",
+      charge_cancelled: "charge_cancelled",
+      sms_sent: "sms_sent",
+      email_sent: "email_sent",
+      api_call: "api_call",
+      storage_used: "storage_used",
+      custom_event: "custom_event"
     }
 
     validates :kind, presence: true
@@ -31,7 +29,7 @@ module ActiveBilling
     scope :chargeable, -> { where(chargeable: true) }
 
     def extra_charges_count
-      [(metadata['issued_charges_count'] || 0) - 1, 0].max
+      [(metadata["issued_charges_count"] || 0) - 1, 0].max
     end
 
     private

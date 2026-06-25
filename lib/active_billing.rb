@@ -1,20 +1,25 @@
+require "discard"
+
 require "active_billing/version"
+require "active_billing/money"
 require "active_billing/engine"
 
 require "active_billing/concerns/chargeable"
 require "active_billing/concerns/nfe_description"
-require "active_billing/concerns/currency_attribute"
 require "active_billing/concerns/timestamp_store_accessor"
 
 module ActiveBilling
   class Error < StandardError; end
 
   class << self
-    attr_accessor :configuration
+    attr_writer :configuration
+  end
+
+  def self.configuration
+    @configuration ||= Configuration.new
   end
 
   def self.configure
-    self.configuration ||= Configuration.new
     yield(configuration)
   end
 
@@ -24,6 +29,7 @@ module ActiveBilling
                   :default_interest,
                   :default_cycle_interval,
                   :billing_entity_method,
+                  :billable_entity_class,
                   :api_enabled,
                   :api_authorizer
 
@@ -33,6 +39,7 @@ module ActiveBilling
       @default_interest       = 100
       @default_cycle_interval = :monthly
       @billing_entity_method  = :billing_entity
+      @billable_entity_class  = nil
       @api_enabled            = false
       @api_authorizer         = nil
     end
