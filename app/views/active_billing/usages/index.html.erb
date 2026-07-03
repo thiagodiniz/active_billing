@@ -1,26 +1,38 @@
-<h1><%= t("active_billing.usage.index_title", default: "Usages") %></h1>
+<div class="sm:flex sm:items-center">
+  <div class="sm:flex-auto">
+    <h1 class="text-base font-semibold text-white"><%= t("active_billing.usage.index_title", default: "Usages") %></h1>
+  </div>
+</div>
 
 <% if @usages.empty? %>
-  <p><%= t("active_billing.usage.empty", default: "No usages for this billable entity.") %></p>
+  <p class="mt-6 text-sm text-gray-400"><%= t("active_billing.usage.empty", default: "No usages for this billable entity.") %></p>
 <% else %>
-  <table class="active-billing-table">
-    <thead>
-      <tr>
-        <th><%= t("active_billing.usage.month", default: "Month") %></th>
-        <th><%= t("active_billing.usage.total_cost", default: "Total cost") %></th>
-        <th><%= t("active_billing.usage.invoice_status", default: "Invoice") %></th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      <% @usages.each do |usage| %>
-        <tr>
-          <td><%= usage.month %></td>
-          <td><%= format_cents(usage.total_cost_in_cents) %></td>
-          <td><%= usage.invoice_status %></td>
-          <td><%= link_to t("active_billing.show", default: "View"), usage_path(usage, current_scope_params) %></td>
-        </tr>
-      <% end %>
-    </tbody>
-  </table>
+  <div class="mt-8 flow-root">
+    <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+      <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+        <table class="min-w-full divide-y divide-white/15">
+          <thead>
+            <tr>
+              <th scope="col" class="py-3.5 pr-3 pl-4 text-left text-sm font-semibold text-white sm:pl-3"><%= t("active_billing.usage.month", default: "Month") %></th>
+              <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-white"><%= t("active_billing.usage.total_cost", default: "Total cost") %></th>
+              <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-white"><%= t("active_billing.usage.invoice_status", default: "Invoice") %></th>
+              <th scope="col" class="py-3.5 pr-4 pl-3 sm:pr-3"><span class="sr-only"><%= t("active_billing.show", default: "View") %></span></th>
+            </tr>
+          </thead>
+          <tbody class="bg-gray-900">
+            <% @usages.each do |usage| %>
+              <tr class="even:bg-gray-800/50">
+                <td class="py-4 pr-3 pl-4 text-sm font-medium whitespace-nowrap text-white sm:pl-3"><%= usage.month %></td>
+                <td class="px-3 py-4 text-sm whitespace-nowrap text-gray-400"><%= format_cents(usage.total_cost_in_cents) %></td>
+                <td class="px-3 py-4 text-sm whitespace-nowrap text-gray-400"><%= usage.invoice_status %></td>
+                <td class="py-4 pr-4 pl-3 text-right text-sm font-medium whitespace-nowrap sm:pr-3">
+                  <%= link_to t("active_billing.show", default: "View"), usage_path(usage, current_scope_params), class: "text-indigo-400 hover:text-indigo-300" %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 <% end %>
