@@ -51,6 +51,9 @@ active_billing/
 │   │       └── active_billing/
 │   │           ├── views/           # rails g active_billing:views
 │   │           ├── controllers/     # rails g active_billing:controllers
+│   │           ├── api_controller/  # rails g active_billing:api_controller <resource>
+│   │           ├── api_views/       # rails g active_billing:api_views <resource>
+│   │           ├── api_base/        # rails g active_billing:api_base
 │   │           └── install/         # rails g active_billing:install (+ templates/)
 │   │
 │   └── tasks/
@@ -65,21 +68,23 @@ active_billing/
 │   │       ├── usages_controller.rb        # Portal: index + show
 │   │       ├── charges_controller.rb       # Portal: index + show
 │   │       ├── plans_controller.rb         # Portal: show (current plan)
-│   │       └── api/                        # Standalone JSON API  (planned)
+│   │       └── api/                        # Standalone JSON API (ActiveBilling::Api::V1)
 │   │           └── v1/
-│   │               ├── base_controller.rb
+│   │               ├── base_controller.rb          # gate + auth + error envelope
+│   │               ├── plans_controller.rb
 │   │               ├── billings_controller.rb
+│   │               ├── usages_controller.rb
 │   │               ├── events_controller.rb
 │   │               ├── invoices_controller.rb
-│   │               └── plans_controller.rb
+│   │               ├── invoice_items_controller.rb
+│   │               └── charges_controller.rb
 │   ├── helpers/
 │   │   └── active_billing/
 │   │       └── application_helper.rb       # format_cents, etc.
 │   ├── views/
-│   │   ├── active_billing/                 # Portal views (invoices/usages/charges/plans/shared)
+│   │   ├── active_billing/                 # Portal ERB views (invoices/usages/charges/plans/shared)
+│   │   │   └── api/v1/                     # jbuilder API views (one _partial + index/show per resource)
 │   │   └── layouts/active_billing/
-│   └── serializers/                        # JSON serializers  (planned)
-│       └── active_billing/
 │
 ├── config/
 │   ├── routes.rb                    # Engine routes (portal resources)
@@ -158,14 +163,17 @@ Located under `lib/generators/active_billing/`:
 
 - **views/** — `rails g active_billing:views` copies the portal views into the host app
 - **controllers/** — `rails g active_billing:controllers` copies the portal controllers
+- **api_controller/** — `rails g active_billing:api_controller <resource>` copies one API controller
+- **api_views/** — `rails g active_billing:api_views <resource>` copies one resource's jbuilder views
+- **api_base/** — `rails g active_billing:api_base` copies the API base controller
 - **install/** — `rails g active_billing:install` writes a config initializer (template under `install/templates/`) and prints setup steps
 
-### Engine (standalone JSON API) — planned
+### Engine — standalone JSON API
 
-- **controllers/active_billing/api/v1/** — versioned JSON controllers; would require `config.api_enabled = true` and a `config.api_authorizer` callable
-- **serializers/active_billing/** — JSON serialization of the public surface
+Located under `app/` (namespace `ActiveBilling::Api::V1`):
 
-These are part of the intended design and are **not yet implemented**.
+- **controllers/active_billing/api/v1/** — `base_controller.rb` (enforces `config.api_enabled`, authenticates `X-Api-Key` via `config.api_authorizer`, maps errors to a JSON envelope) plus one controller per model. Full CRUD guarded by the domain rules; custom transitions are REST noun sub-resources.
+- **views/active_billing/api/v1/** — jbuilder serialization (`_<resource>.json.jbuilder` partial reused by `index`/`show`). Money renders as integer cents.
 
 ### Database
 

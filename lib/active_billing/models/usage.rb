@@ -22,6 +22,8 @@ module ActiveBilling
                              inverse_of: :usage
     has_many :invoices, -> { distinct }, through: :invoice_items
 
+    validate :immutable_when_closed, on: :update
+
     scope :for_billable_entity, ->(type, id) { where(billable_entity_type: type, billable_entity_id: id) }
     scope :for_month, ->(date) { where(month: date.beginning_of_month) }
     scope :for_year, ->(year) { where("extract(year from month) = ?", year) }
@@ -58,6 +60,16 @@ module ActiveBilling
 
     def self.current_month
       find_by(month: Date.current.beginning_of_month)
+    end
+
+    def closed?
+      closed_at.present?
+    end
+
+    def close!
+      return if closed?
+
+      update!(closed_at: Time.current)
     end
 
     def small_description
@@ -112,6 +124,15 @@ module ActiveBilling
 
     def self.ransackable_scopes(_auth_object = nil)
       %i[with_invoices without_invoices invoice_presence with_invoice_state for_month for_year]
+    end
+
+    private
+
+    def immutable_when_closed
+      return if closed_at_was.blank?
+      return if (changes.keys - %w[updated_at]).empty?
+
+      errors.add(:base, :closed, message: "usage is closed and cannot be modified")
     end
   end
 end

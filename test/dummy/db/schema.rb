@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_15_211828) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_03_041120) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "hstore"
   enable_extension "pg_catalog.plpgsql"
@@ -20,6 +20,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_15_211828) do
     t.bigint "billable_entity_id", null: false
     t.string "billable_entity_type", null: false
     t.datetime "created_at", null: false
+    t.datetime "discarded_at"
     t.jsonb "metadata", default: {}, null: false
     t.date "period_end"
     t.date "period_start"
@@ -31,6 +32,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_15_211828) do
     t.datetime "updated_at", null: false
     t.uuid "uuid", default: -> { "gen_random_uuid()" }, null: false
     t.index ["billable_entity_type", "billable_entity_id"], name: "index_active_billing_billings_on_billable_entity"
+    t.index ["discarded_at"], name: "index_active_billing_billings_on_discarded_at"
     t.index ["plan_id"], name: "index_active_billing_billings_on_plan_id"
     t.index ["state"], name: "index_active_billing_billings_on_state"
     t.index ["uuid"], name: "index_active_billing_billings_on_uuid", unique: true
@@ -40,11 +42,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_15_211828) do
     t.datetime "created_at", null: false
     t.integer "default_interest"
     t.integer "default_penalty"
+    t.datetime "discarded_at"
     t.bigint "invoice_id"
     t.bigint "resource_id", null: false
     t.string "resource_type", null: false
     t.datetime "updated_at", null: false
     t.uuid "uuid", default: -> { "gen_random_uuid()" }, null: false
+    t.index ["discarded_at"], name: "index_active_billing_charges_on_discarded_at"
     t.index ["invoice_id"], name: "index_active_billing_charges_on_invoice_id"
     t.index ["resource_type", "resource_id"], name: "index_active_billing_charges_on_resource"
     t.index ["uuid"], name: "index_active_billing_charges_on_uuid", unique: true
@@ -85,6 +89,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_15_211828) do
     t.bigint "billing_id"
     t.datetime "created_at", null: false
     t.text "description"
+    t.datetime "discarded_at"
     t.hstore "email_timestamps"
     t.string "external_invoice_id"
     t.datetime "issued_at"
@@ -98,6 +103,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_15_211828) do
     t.datetime "updated_at", null: false
     t.uuid "uuid", default: -> { "gen_random_uuid()" }, null: false
     t.index ["billing_id"], name: "index_active_billing_invoices_on_billing_id"
+    t.index ["discarded_at"], name: "index_active_billing_invoices_on_discarded_at"
     t.index ["external_invoice_id"], name: "index_active_billing_invoices_on_external_invoice_id", unique: true
     t.index ["resource_type", "resource_id"], name: "index_active_billing_invoices_on_resource"
     t.index ["state"], name: "index_active_billing_invoices_on_state"
@@ -122,6 +128,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_15_211828) do
     t.bigint "billable_entity_id", null: false
     t.string "billable_entity_type", null: false
     t.bigint "billing_id"
+    t.datetime "closed_at"
     t.datetime "created_at", null: false
     t.hstore "email_timestamps"
     t.jsonb "metadata", default: {}, null: false
@@ -132,6 +139,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_15_211828) do
     t.index ["billable_entity_type", "billable_entity_id", "month"], name: "index_active_billing_usages_on_entity_and_month", unique: true
     t.index ["billable_entity_type", "billable_entity_id"], name: "index_active_billing_usages_on_billable_entity"
     t.index ["billing_id"], name: "index_active_billing_usages_on_billing_id"
+    t.index ["closed_at"], name: "index_active_billing_usages_on_closed_at"
     t.index ["month"], name: "index_active_billing_usages_on_month"
     t.index ["uuid"], name: "index_active_billing_usages_on_uuid", unique: true
   end

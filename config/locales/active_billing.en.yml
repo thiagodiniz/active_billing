@@ -12,6 +12,10 @@ en:
       missing_billable_entity:
         title: "Billable entity required"
         body: "This page requires a billable_entity_id (and billable_entity_type unless a default is configured)."
+    api:
+      errors:
+        api_authorizer_not_configured: "No api_authorizer is configured"
+        unauthorized: "Invalid or missing API key"
     invoice:
       index_title: "Invoices"
       show_title: "Invoice"
