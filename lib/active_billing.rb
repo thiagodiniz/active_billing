@@ -1,10 +1,7 @@
-require "discard"
-
 require "active_billing/version"
 require "active_billing/money"
 require "active_billing/engine"
 
-require "active_billing/concerns/chargeable"
 require "active_billing/concerns/nfe_description"
 require "active_billing/concerns/timestamp_store_accessor"
 
@@ -30,6 +27,8 @@ module ActiveBilling
                   :default_cycle_interval,
                   :billing_entity_method,
                   :billable_entity_class,
+                  :invoice_description,
+                  :parent_controller,
                   :api_enabled,
                   :api_authorizer
 
@@ -40,6 +39,8 @@ module ActiveBilling
       @default_cycle_interval = :monthly
       @billing_entity_method  = :billing_entity
       @billable_entity_class  = nil
+      @invoice_description    = nil
+      @parent_controller      = "ActionController::Base"
       @api_enabled            = false
       @api_authorizer         = nil
     end
