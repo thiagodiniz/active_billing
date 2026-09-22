@@ -40,4 +40,7 @@
   </table>
 <% end %>
 
-<p><%= link_to t("active_billing.back", default: "Back"), invoices_path(current_scope_params) %></p>
+<p>
+  <%= link_to t("active_billing.invoice.download_pdf", default: "Download PDF"), invoice_path(@invoice, current_scope_params.merge(format: :pdf)) %> |
+  <%= link_to t("active_billing.back", default: "Back"), invoices_path(current_scope_params) %>
+</p>

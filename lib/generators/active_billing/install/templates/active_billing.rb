@@ -19,4 +19,21 @@ ActiveBilling.configure do |config|
   # Controller the engine's portal controllers inherit from. Point it at your own
   # base controller so the portal runs behind your authentication and layout.
   config.parent_controller = "ActionController::Base"
+
+  # Issuer details printed on invoice PDFs (required for PDF rendering).
+  # config.company = {
+  #   name: "Example, LLC",
+  #   address: "123 Fake Street\nNew York City, NY 10012",
+  #   email: "billing@example.com",
+  #   phone: "+1 555 000 0000",
+  #   logo: Rails.root.join("app/assets/images/logo.png")
+  # }
+
+  # Recipient lines printed on invoice PDFs. Defaults to the billable entity's
+  # name, address, email and tax_id when it responds to them.
+  # config.invoice_recipient = ->(invoice) { [invoice.billing.billable_entity.name] }
+
+  # Footer message and page size for invoice PDFs.
+  # config.invoice_pdf_footer = "Thanks for your business."
+  # config.invoice_pdf_page_size = "A4"
 end

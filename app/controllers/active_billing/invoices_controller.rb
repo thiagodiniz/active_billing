@@ -9,6 +9,16 @@ module ActiveBilling
 
     def show
       @invoice = Invoice.find(params[:id])
+
+      respond_to do |format|
+        format.html
+        format.pdf do
+          send_data @invoice.to_pdf,
+                    filename: "invoice-#{@invoice.uuid}.pdf",
+                    type: "application/pdf",
+                    disposition: "inline"
+        end
+      end
     end
   end
 end
