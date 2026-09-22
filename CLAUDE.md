@@ -19,7 +19,7 @@ The gem supports two install modes from the same codebase:
 | `Event`       | Append-only billable action recorded against a Usage.                         |
 | `Invoice`     | Document produced when a Billing is finalized. State-machine: created → processing → issued → cancelled / failed. |
 | `InvoiceItem` | Line item owned by an Invoice.                                                |
-| `Charge`      | Payment record + state machine. Payment-provider adapters are roadmap; v1 ships state model only and exposes callbacks. |
+| `Charge`      | Payment record. The state machine and payment-provider adapters are roadmap; today it ships as a record only. |
 
 Lifecycle: **configure Billing → record Events → close Usage → adjust Billing → finalize → Invoice → Charge.** Never bypass this order in new code.
 
@@ -60,7 +60,7 @@ bundle exec rake db:migrate # Run migrations (test app)
 - One class per file under `lib/active_billing/models/` and `lib/active_billing/concerns/`
 - All models inherit from `ActiveRecord::Base`
 - Concerns use `extend ActiveSupport::Concern` with `included do` blocks
-- Namespace everything under `ActiveBilling::` (e.g. `ActiveBilling::Concerns::Chargeable`, `ActiveBilling::Type::Money`)
+- Namespace everything under `ActiveBilling::` (e.g. `ActiveBilling::Concerns::NfeDescription`, `ActiveBilling::Type::Money`)
 - Composition over inheritance — use concerns and polymorphic associations, not deep class hierarchies
 
 ### Models — Internal Block Ordering
@@ -71,7 +71,7 @@ Every model must follow this strict top-to-bottom ordering. Separate each sectio
 class Invoice < ActiveRecord::Base
   # 1. Includes (concerns, modules)
   include ActiveBilling::Concerns::TimestampStoreAccessor
-  include ActiveBilling::Concerns::Chargeable
+  include ActiveBilling::Concerns::NfeDescription
 
   # 2. Constants
   FINISHED_STATES = %w[cancelled failed].freeze
@@ -159,12 +159,10 @@ end
 - **Polymorphic associations** for flexible resource types: `belongs_to :resource, polymorphic: true`
 - **Delegation**: `delegate :method, to: :association, allow_nil: true`
 - **Aliasing**: `alias payer resource` for semantic clarity
-- **Soft deletes** via `Discard::Model` (included in section 1)
 - **Blank lines between sections** — never between items within the same section (except semantic grouping in associations)
 
 ### Concerns (Metaprogramming Patterns)
 
-- `class_eval` for dynamic scope generation (Chargeable)
 - `store_accessor` for hstore fields (TimestampStoreAccessor)
 - Keep metaprogramming in concerns, not in models
 - Prefer a custom `ActiveRecord::Type` over accessor-generating concerns for value casting/serialization (e.g. `ActiveBilling::Type::Money` for `*_in_cents` columns)

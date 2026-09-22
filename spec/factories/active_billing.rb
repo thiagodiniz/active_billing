@@ -22,12 +22,7 @@ FactoryBot.define do
   end
 
   factory :active_billing_usage, class: "ActiveBilling::Usage" do
-    transient do
-      billable_entity { create(:store) }
-    end
-
-    billable_entity_type { billable_entity.class.name }
-    billable_entity_id { billable_entity.id }
+    association :billable_entity, factory: :store
     month { Date.current.beginning_of_month }
     total_cost_in_cents { 0 }
   end

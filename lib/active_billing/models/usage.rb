@@ -6,9 +6,7 @@ module ActiveBilling
 
     attribute :total_cost_in_cents, :active_billing_money
 
-    # Override this association in your application
-    # belongs_to :billable_entity (e.g., :customer, :tenant, :organization)
-
+    belongs_to :billable_entity, polymorphic: true
     belongs_to :billing, class_name: "ActiveBilling::Billing", optional: true
 
     has_many :events, foreign_key: "billing_usage_id",

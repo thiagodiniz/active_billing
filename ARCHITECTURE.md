@@ -134,7 +134,6 @@ Usage is the **measurement** phase (immutable once closed). Billing is the **ass
 
 ### Concerns for cross-cutting behavior
 
-- `Chargeable` — payment-related associations and scopes
 - `TimestampStoreAccessor` — email tracking timestamps in `hstore`
 - `NfeDescription` — opt-in Brazilian fiscal invoice description support
 

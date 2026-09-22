@@ -15,4 +15,8 @@ ActiveBilling.configure do |config|
   # Default polymorphic type for portal pages when billable_entity_type is not
   # passed as a query param, e.g. "Store" or "Organization".
   config.billable_entity_class = nil
+
+  # Controller the engine's portal controllers inherit from. Point it at your own
+  # base controller so the portal runs behind your authentication and layout.
+  config.parent_controller = "ActionController::Base"
 end
