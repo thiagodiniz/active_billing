@@ -3,6 +3,7 @@ require "active_billing/providers/result"
 require "active_billing/providers/webhook_event"
 require "active_billing/providers/base"
 require "active_billing/providers/test"
+require "active_billing/providers/stripe"
 
 module ActiveBilling
   # Entry point for payment-provider adapters.
@@ -72,5 +73,6 @@ module ActiveBilling
     end
 
     register :test, Test
+    register :stripe, Stripe
   end
 end

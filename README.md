@@ -337,6 +337,21 @@ ActiveBilling.configure do |config|
 end
 ```
 
+#### Stripe
+
+```ruby
+config.provider :stripe,
+                api_key:        ENV["STRIPE_SECRET_KEY"],      # required
+                webhook_secret: ENV["STRIPE_WEBHOOK_SECRET"],  # required for webhooks (whsec_...)
+                success_url:    "https://app.example.com/billing/success", # required for payments
+                cancel_url:     "https://app.example.com/billing/cancel",  # required for payments
+                webhook_tolerance: 300                         # optional, seconds
+```
+
+- Plans become a Product plus a recurring Price (`unit_amount`, `currency` from `config.currency`, `recurring[interval]` = `month`/`year`). Prices are immutable on Stripe, so changing a plan's price creates a new Price and archives the previous one; the current price id is kept in `ProviderReference#metadata["price_id"]`.
+- Payments are hosted [Checkout Sessions](https://docs.stripe.com/api/checkout/sessions) in `payment` mode; `Charge#payment_url` is the session `url`. `cancel_payment` expires the session (only possible while it is `open`).
+- Register `POST <mount>/webhooks/stripe` as a webhook endpoint and subscribe to `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `checkout.session.expired` and `customer.subscription.*`. Signatures are verified from the `Stripe-Signature` header; other event types are ignored.
+
 ### Per-account providers
 
 Each billable entity picks its provider through a `ProviderAccount`; different accounts can live on different providers and every call goes to that provider's endpoints:
