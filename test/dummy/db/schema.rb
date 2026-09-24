@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_15_211828) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_24_211544) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "hstore"
   enable_extension "pg_catalog.plpgsql"
@@ -45,8 +45,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_15_211828) do
     t.string "resource_type", null: false
     t.datetime "updated_at", null: false
     t.uuid "uuid", default: -> { "gen_random_uuid()" }, null: false
+    t.string "state", default: "created", null: false
+    t.string "provider"
+    t.string "external_id"
+    t.string "payment_url"
+    t.datetime "paid_at"
+    t.datetime "failed_at"
+    t.datetime "expired_at"
+    t.jsonb "metadata", default: {}, null: false
     t.index ["invoice_id"], name: "index_active_billing_charges_on_invoice_id"
+    t.index ["provider", "external_id"], name: "index_active_billing_charges_on_provider_and_external_id", unique: true
     t.index ["resource_type", "resource_id"], name: "index_active_billing_charges_on_resource"
+    t.index ["state"], name: "index_active_billing_charges_on_state"
     t.index ["uuid"], name: "index_active_billing_charges_on_uuid", unique: true
   end
 
@@ -116,6 +126,35 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_15_211828) do
     t.uuid "uuid", default: -> { "gen_random_uuid()" }, null: false
     t.index ["active"], name: "index_active_billing_plans_on_active"
     t.index ["uuid"], name: "index_active_billing_plans_on_uuid", unique: true
+  end
+
+  create_table "active_billing_provider_accounts", force: :cascade do |t|
+    t.uuid "uuid", default: -> { "gen_random_uuid()" }, null: false
+    t.string "billable_entity_type", null: false
+    t.bigint "billable_entity_id", null: false
+    t.string "provider", null: false
+    t.string "external_customer_id"
+    t.boolean "active", default: true, null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["billable_entity_type", "billable_entity_id", "provider"], name: "index_active_billing_provider_accounts_on_entity", unique: true
+    t.index ["billable_entity_type", "billable_entity_id"], name: "index_active_billing_provider_accounts_on_billable_entity"
+    t.index ["provider", "external_customer_id"], name: "index_active_billing_provider_accounts_on_customer"
+    t.index ["uuid"], name: "index_active_billing_provider_accounts_on_uuid", unique: true
+  end
+
+  create_table "active_billing_provider_references", force: :cascade do |t|
+    t.string "record_type", null: false
+    t.bigint "record_id", null: false
+    t.string "provider", null: false
+    t.string "external_id", null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["provider", "external_id"], name: "index_active_billing_provider_references_on_external_id"
+    t.index ["record_type", "record_id", "provider"], name: "index_active_billing_provider_references_on_record_provider", unique: true
+    t.index ["record_type", "record_id"], name: "index_active_billing_provider_references_on_record"
   end
 
   create_table "active_billing_usages", force: :cascade do |t|

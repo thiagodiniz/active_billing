@@ -65,6 +65,43 @@ module ActiveBilling
       end
     end
 
+    describe "issuing", :providers do
+      context "when the payer has a provider account" do
+        before { create(:active_billing_provider_account, billable_entity: store) }
+
+        it "opens a charge" do
+          expect { invoice.update!(state: "issued") }.to change(invoice.charges, :count).by(1)
+        end
+
+        it "requests the payment from the provider" do
+          invoice.update!(state: "issued")
+          expect(invoice.charges.first).to have_attributes(provider: "test", state: "pending")
+        end
+
+        it "does not open a second charge on later saves" do
+          invoice.update!(state: "issued")
+          expect { invoice.update!(description: "changed") }.not_to change(Charge, :count)
+        end
+      end
+
+      context "when the payer has no provider account" do
+        it "does not open a charge" do
+          expect { invoice.update!(state: "issued") }.not_to change(Charge, :count)
+        end
+      end
+
+      context "when provider sync is disabled" do
+        before do
+          ActiveBilling.configuration.provider_sync_enabled = false
+          create(:active_billing_provider_account, billable_entity: store)
+        end
+
+        it "does not open a charge" do
+          expect { invoice.update!(state: "issued") }.not_to change(Charge, :count)
+        end
+      end
+    end
+
     describe "#set_description" do
       subject(:invoice) do
         build(:active_billing_invoice, billing: billing, description: nil, add_usages_ids: [usage.id])
