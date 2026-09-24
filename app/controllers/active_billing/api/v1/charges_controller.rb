@@ -40,7 +40,7 @@ module ActiveBilling
         private
 
         def find_charge
-          ActiveBilling::Charge.find(params[:id])
+          scoped(ActiveBilling::Charge.kept).find(params[:id])
         end
 
         def charge_params

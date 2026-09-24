@@ -19,6 +19,8 @@ module ActiveBilling
 
         def update
           @billing = find_billing
+          raise ActiveBilling::Error, "billing cannot be changed after finalization" unless @billing.open?
+
           @billing.update!(billing_params)
           render :show
         end
@@ -46,12 +48,16 @@ module ActiveBilling
         private
 
         def find_billing
-          ActiveBilling::Billing.find(params[:id])
+          scoped(ActiveBilling::Billing.kept).find(params[:id])
         end
 
+        # `state` is never mass-assignable (use /finalization). `plan_id` is only accepted
+        # on create; afterwards plans change via PUT /billings/:id/plan so the snapshot
+        # stays consistent.
         def billing_params
-          params.require(:billing).permit(:plan_id, :billable_entity_type, :billable_entity_id,
-                                          :period_start, :period_end, :state, metadata: {})
+          permitted = %i[billable_entity_type billable_entity_id period_start period_end]
+          permitted << :plan_id if action_name == "create"
+          params.require(:billing).permit(*permitted, metadata: {})
         end
       end
     end

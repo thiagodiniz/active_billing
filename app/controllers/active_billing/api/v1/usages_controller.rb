@@ -44,7 +44,7 @@ module ActiveBilling
         private
 
         def find_usage
-          ActiveBilling::Usage.find(params[:id])
+          scoped(ActiveBilling::Usage.all).find(params[:id])
         end
 
         def usage_params

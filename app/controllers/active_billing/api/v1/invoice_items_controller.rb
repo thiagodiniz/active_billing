@@ -36,7 +36,7 @@ module ActiveBilling
         private
 
         def invoice
-          @invoice ||= ActiveBilling::Invoice.find(params[:invoice_id])
+          @invoice ||= scoped(ActiveBilling::Invoice.kept).find(params[:invoice_id])
         end
 
         def guard_issuable!

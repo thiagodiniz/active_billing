@@ -43,14 +43,31 @@ module ActiveBilling
                               default: "Invalid or missing API key"))
         end
 
-        # Applies billable-entity scoping when the request carries the params and the
-        # relation supports it (Billing, Usage, Invoice, Charge).
+        # Applies billable-entity scoping when the relation supports it (Billing, Usage,
+        # Invoice, Charge). When the authorizer's scope exposes `billable_entity_type` and
+        # `billable_entity_id` it is enforced and cannot be overridden by the client;
+        # otherwise the optional query params are used as a filter.
         def scoped(relation)
-          type = params[:billable_entity_type].presence
-          id = params[:billable_entity_id].presence
+          type, id = billable_entity_filter
           return relation unless type && id && relation.respond_to?(:for_billable_entity)
 
           relation.for_billable_entity(type, id)
+        end
+
+        def billable_entity_filter
+          scope_type = api_scope_value(:billable_entity_type)
+          scope_id = api_scope_value(:billable_entity_id)
+          return [scope_type, scope_id] if scope_type.present? && scope_id.present?
+
+          [params[:billable_entity_type].presence, params[:billable_entity_id].presence]
+        end
+
+        def api_scope_value(key)
+          if @api_scope.respond_to?(key)
+            @api_scope.public_send(key)
+          elsif @api_scope.is_a?(Hash)
+            @api_scope[key] || @api_scope[key.to_s]
+          end
         end
 
         def render_error(status, code, message, details = nil)
