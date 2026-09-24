@@ -337,6 +337,42 @@ ActiveBilling.configure do |config|
 end
 ```
 
+#### AbacatePay
+
+Talks to the [AbacatePay API v2](https://docs.abacatepay.com) (`https://api.abacatepay.com/v2`) with `Authorization: Bearer <api_key>`. **BRL only** — `create_payment` raises `Providers::ConfigurationError` when `config.currency` is not `:BRL`.
+
+```ruby
+config.provider :abacatepay,
+                api_key:              ENV["ABACATEPAY_API_KEY"],         # required
+                webhook_secret:       ENV["ABACATEPAY_WEBHOOK_SECRET"],  # required, see webhooks below
+                return_url:           "https://app.example.com/billing", # optional, subscription checkout "back" link
+                completion_url:       "https://app.example.com/thanks",  # optional, subscription checkout redirect after payment
+                subscription_methods: ["CARD"],                          # optional, default ["CARD"]
+                pix_expires_in:       3600                               # optional, PIX expiry in seconds
+```
+
+| Operation                        | AbacatePay                                                                                                        |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `create_customer`                | `POST /customers/create` — `name`, `email`, `cellphone`, `taxId` from the billable entity (`name`, `email`, `cellphone`, `tax_id`) or `ProviderAccount#metadata` |
+| `update_customer`                | **not supported** (no endpoint)                                                                                   |
+| `create_plan` / `archive_plan`   | `POST /products/create` (recurring product, `monthly → MONTHLY`, `yearly → ANNUALLY`) / `POST /products/delete`   |
+| `update_plan`                    | **not supported** — products are immutable; create a new `Plan`                                                   |
+| `create_subscription`            | `POST /subscriptions/create` — returns a hosted checkout (`Result#url`); the `ProviderReference` is keyed by the checkout id |
+| `update_subscription`            | `POST /subscriptions/change-plan` to the billing's current plan                                                   |
+| `cancel_subscription`            | `POST /subscriptions/cancel` (`cancelPolicy: NOW`)                                                                |
+| `create_payment` / `fetch_payment` | transparent PIX charge: `POST /transparents/create` / `GET /transparents/check` (`brCode` / `brCodeBase64` end up in `Charge#metadata`) |
+| `cancel_payment`                 | **not supported** — PIX charges expire on their own                                                               |
+
+Payment statuses map as `PENDING → pending`, `UNDER_DISPUTE → processing`, `PAID / APPROVED / REDEEMED → paid`, `FAILED → failed`, `EXPIRED → expired`, `CANCELLED / REFUNDED → cancelled`.
+
+Caveats:
+
+- Hosted checkouts (`/checkouts/create`) require pre-registered products, so one-off invoices are charged through transparent PIX instead; there is no hosted `payment_url` — render the `brCode` from `charge.metadata`.
+- A subscription only exists at AbacatePay after the customer pays the checkout. `update_subscription` / `cancel_subscription` need the `subs_` id, which the adapter reads from the last `subscription.*` webhook stored in `ProviderReference#metadata` (or from `metadata["subscription_id"]`) and raises `Providers::Error` if none has arrived yet.
+- Subscription changes/renewals are billed by AbacatePay; ActiveBilling does not issue charges for subscription cycles.
+
+**Webhooks:** register `POST <mount>/webhooks/abacatepay?webhookSecret=<ABACATEPAY_WEBHOOK_SECRET>` on the AbacatePay dashboard. The query parameter is compared against `webhook_secret`; when AbacatePay sends `X-Webhook-Signature`, the HMAC-SHA256 of the raw body is verified too (disable with `verify_signature: false`, or override the key with `signature_key:`). Events: `transparent.completed` / `checkout.completed → payment_paid`, `transparent.refunded` / `checkout.refunded → payment_cancelled`, `subscription.completed` / `subscription.trial_started → subscription_created`, `subscription.renewed` / `subscription.plan_changed` / `subscription.payment_failed → subscription_updated`, `subscription.cancelled → subscription_cancelled`; everything else is ignored.
+
 ### Per-account providers
 
 Each billable entity picks its provider through a `ProviderAccount`; different accounts can live on different providers and every call goes to that provider's endpoints:
