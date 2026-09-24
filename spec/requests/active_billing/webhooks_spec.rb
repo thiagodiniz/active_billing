@@ -19,6 +19,29 @@ RSpec.describe "ActiveBilling::Webhooks", :providers, type: :request do
       end
     end
 
+    context "with the abacatepay provider" do
+      let!(:charge) { create(:active_billing_charge, :synced, provider: "abacatepay", external_id: "pix_char_1") }
+      let(:payload) do
+        { event: "transparent.completed", data: { transparent: { id: "pix_char_1", status: "PAID" } } }.to_json
+      end
+
+      before do
+        ActiveBilling.configuration.providers[:abacatepay] = { api_key: "abc_dev_key", webhook_secret: "whsec_abacate" }
+        ActiveBilling.configuration.provider_sync_enabled = false
+      end
+
+      it "authenticates with the webhookSecret query parameter" do
+        post "/active_billing/webhooks/abacatepay?webhookSecret=whsec_abacate", params: payload, headers: headers
+        expect(response).to have_http_status(:ok)
+        expect(charge.reload).to be_paid
+      end
+
+      it "rejects a wrong webhookSecret" do
+        post "/active_billing/webhooks/abacatepay?webhookSecret=nope", params: payload, headers: headers
+        expect(response).to have_http_status(:unauthorized)
+      end
+    end
+
     context "with an unknown provider" do
       it "responds not found" do
         post "/active_billing/webhooks/nope", params: payload, headers: headers

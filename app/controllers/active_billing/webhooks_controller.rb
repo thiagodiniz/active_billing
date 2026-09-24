@@ -15,7 +15,7 @@ module ActiveBilling
     private
 
     def webhook_headers
-      request.headers.env.each_with_object({}) do |(key, value), headers|
+      request.headers.env.each_with_object({ "QUERY_STRING" => request.query_string }) do |(key, value), headers|
         next unless key.start_with?("HTTP_")
 
         headers[key.delete_prefix("HTTP_").split("_").map(&:capitalize).join("-")] = value
