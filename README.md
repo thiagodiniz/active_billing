@@ -320,16 +320,59 @@ Embedded callers get the same behavior by calling the model methods directly; st
 
 ## Payments
 
-> **Status.** `Charge` currently ships as a payment **record** (polymorphic `payer`/`resource`, optional `invoice`, default penalty/interest, `for_billable_entity` scope). The full **state machine** (`created → processing → paid / failed / expired`) and the `after_paid`-style callbacks below are **planned**.
+`Charge` carries a string-backed state machine (`created → pending → processing → paid / failed / expired / cancelled`) that is driven by **payment providers**. Providers are pluggable adapters behind a common interface (`ActiveBilling::Providers::Base`); the engine ships an in-memory `:test` adapter, and `:stripe`, `:polar` and `:abacatepay` adapters are implemented against the same contract.
 
-ActiveBilling aims to ship the **Charge state machine** (`created → processing → paid / failed / expired`) and an extension surface for payment providers, but it does **not** ship a Stripe/Pagar.me/etc. adapter. Wire your own provider via callbacks:
+### Configuring providers
 
 ```ruby
-ActiveBilling::Charge.after_create :send_to_gateway
-ActiveBilling::Charge.after_paid   :reconcile_with_ledger
+ActiveBilling.configure do |config|
+  config.provider :stripe,     api_key: ENV["STRIPE_SECRET_KEY"],   webhook_secret: ENV["STRIPE_WEBHOOK_SECRET"]
+  config.provider :polar,      api_key: ENV["POLAR_ACCESS_TOKEN"],  webhook_secret: ENV["POLAR_WEBHOOK_SECRET"]
+  config.provider :abacatepay, api_key: ENV["ABACATEPAY_API_KEY"],  webhook_secret: ENV["ABACATEPAY_WEBHOOK_SECRET"]
+
+  config.default_provider      = :stripe          # fallback when an account has no ProviderAccount
+  config.provider_resolver     = ->(entity) { entity.country == "BR" ? :abacatepay : :stripe } # optional
+  config.provider_sync_enabled = true             # set false to turn remote sync off (e.g. in tests)
+  config.provider_sync_async   = true             # false => sync inline instead of via ProviderSyncJob
+end
 ```
 
-A pluggable provider interface (with a Stripe reference implementation) is on the roadmap — see `CHANGELOG.md` for status.
+### Per-account providers
+
+Each billable entity picks its provider through a `ProviderAccount`; different accounts can live on different providers and every call goes to that provider's endpoints:
+
+```ruby
+ActiveBilling::ProviderAccount.create!(billable_entity: customer, provider: :abacatepay)
+# => creates the remote customer and stores external_customer_id
+```
+
+Resolution order: active `ProviderAccount` → `config.provider_resolver` → `config.default_provider`.
+
+### What gets synchronized
+
+| Local record      | Remote effect                                                                 |
+| ----------------- | ----------------------------------------------------------------------------- |
+| `ProviderAccount` | customer created / updated                                                    |
+| `Plan`            | product/price created on **every** configured provider; updated on change     |
+| `Billing`         | subscription created on the account's provider; updated / cancelled on change |
+| `Invoice#issue!`  | creates a `Charge`, which creates a payment (`payment_url` for hosted pages)  |
+| `Charge`          | `refresh_from_provider!` pulls the current payment status                     |
+
+Remote identifiers are kept in `ActiveBilling::ProviderReference` (`plan.provider_reference_for(:stripe)`); per-record sync can be skipped with `record.without_provider_sync { ... }`.
+
+### Webhooks
+
+Mount the engine and point each provider at `POST <mount>/webhooks/:provider` (e.g. `/billing/webhooks/stripe`). Signatures are verified with the provider's `webhook_secret`; payment events update the matching `Charge` (`paid_at`, `failed_at`, …) and subscription events update the `ProviderReference` status.
+
+### Writing an adapter
+
+Subclass `ActiveBilling::Providers::Base`, implement the customer / plan / subscription / payment / webhook methods returning `Providers::Result` and `Providers::WebhookEvent`, and register it:
+
+```ruby
+ActiveBilling::Providers.register(:my_gateway, MyGatewayAdapter)
+```
+
+See `lib/active_billing/providers/test.rb` for a complete reference implementation.
 
 ## Currency and money
 

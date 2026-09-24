@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Payment provider interface (`ActiveBilling::Providers::Base`), registry (`ActiveBilling::Providers`), normalized `Result` / `WebhookEvent` values and an in-memory `:test` adapter. Concrete `:stripe`, `:polar` and `:abacatepay` adapters implement the same contract.
+- `config.provider(name, **settings)`, `default_provider`, `provider_resolver`, `provider_sync_enabled` and `provider_sync_async` configuration.
+- `ProviderAccount` (per-billable-entity provider + remote customer id) and `ProviderReference` (remote ids for plans, subscriptions, …). Each account can live on a different provider.
+- `Concerns::ProviderSyncable` + `Providers::Synchronizer` / `ProviderSyncJob`: plans, subscriptions (`Billing`), customers and charges are mirrored to the provider when created or changed.
+- `Charge` state machine (`created → pending → processing → paid / failed / expired / cancelled`) with `provider`, `external_id`, `payment_url`, `paid_at` / `failed_at` / `expired_at`. Issuing an `Invoice` now creates and submits a `Charge` when the payer has a provider.
+- `POST /webhooks/:provider` endpoint (`Providers::WebhookProcessor`) verifying signatures and applying payment / subscription events.
+
 ### Fixed (code review follow-up)
 - `Invoice` no longer writes to the database while validating. `remove_items_from_removed_usages`/`add_items_from_added_usages` ran `destroy_all` in a `before_validation` callback, so a bare `invoice.valid?` deleted `InvoiceItem` rows outside any transaction. Item reconciliation is now in-memory (`mark_for_destruction` + `items.build`) and applied by autosave when the record is saved.
 - `Invoice#add_usages_ids` treated an assigned `[]` as "keep the current usages", making it impossible to remove every usage.

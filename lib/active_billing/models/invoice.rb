@@ -52,6 +52,7 @@ module ActiveBilling
     before_validation :sync_items_with_usages
     before_validation :set_amount
     before_validation :set_description
+    after_commit :create_charge_for_payment, if: :issued_now?
 
     scope :for_billable_entity, ->(type, id) {
       joins(:billing).where(active_billing_billings: { billable_entity_type: type, billable_entity_id: id })
@@ -78,7 +79,29 @@ module ActiveBilling
       ActiveBilling::Usage.where(id: add_usages_ids)
     end
 
+    def paid?
+      charges.any?(&:paid?)
+    end
+
+    def provider_account
+      ProviderAccount.current_for(billing&.billable_entity || resource)
+    end
+
     private
+
+    def issued_now?
+      saved_change_to_state? && issued?
+    end
+
+    # Issuing an invoice opens a Charge; the charge then asks the payer's provider
+    # for a payment (see Charge#sync_with_provider).
+    def create_charge_for_payment
+      return unless ActiveBilling.configuration.provider_sync_enabled
+      return if charges.exists?
+      return if provider_account.nil?
+
+      charges.create!(resource: resource)
+    end
 
     def set_description
       return if description.present?

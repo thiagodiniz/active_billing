@@ -56,5 +56,27 @@ FactoryBot.define do
   factory :active_billing_charge, class: "ActiveBilling::Charge" do
     association :resource, factory: :store
     association :invoice, factory: :active_billing_invoice
+
+    trait :synced do
+      provider { "test" }
+      sequence(:external_id) { |n| "payment_#{n}" }
+      state { "pending" }
+    end
+  end
+
+  factory :active_billing_provider_account, class: "ActiveBilling::ProviderAccount" do
+    association :billable_entity, factory: :store
+    provider { "test" }
+    active { true }
+
+    trait :synced do
+      sequence(:external_customer_id) { |n| "customer_#{n}" }
+    end
+  end
+
+  factory :active_billing_provider_reference, class: "ActiveBilling::ProviderReference" do
+    association :record, factory: :active_billing_plan
+    provider { "test" }
+    sequence(:external_id) { |n| "plan_#{n}" }
   end
 end

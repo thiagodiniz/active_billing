@@ -6,4 +6,7 @@ ActiveBilling::Engine.routes.draw do
 
   # Current plan for the billable entity.
   resource :plan, only: %i[show]
+
+  # Payment-provider webhooks, e.g. POST /active_billing/webhooks/stripe.
+  post "webhooks/:provider", to: "webhooks#create", as: :provider_webhooks
 end
