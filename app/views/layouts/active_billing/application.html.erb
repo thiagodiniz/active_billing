@@ -1,32 +1,157 @@
 <!DOCTYPE html>
-<html>
+<html class="h-full bg-gray-900">
 <head>
   <title><%= t("active_billing.title", default: "Billing") %></title>
   <%= csrf_meta_tags %>
   <%= csp_meta_tag %>
 
   <%= stylesheet_link_tag "active_billing/application", media: "all" %>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindplus/elements@1" type="module"></script>
 </head>
-<body class="active-billing">
-  <nav class="active-billing-nav">
-    <% if respond_to?(:current_scope_params) && current_scope_params[:billable_entity_id].present? %>
-      <%= link_to t("active_billing.nav.invoices", default: "Invoices"), invoices_path(current_scope_params) %>
-      <%= link_to t("active_billing.nav.usages", default: "Usages"), usages_path(current_scope_params) %>
-      <%= link_to t("active_billing.nav.charges", default: "Charges"), charges_path(current_scope_params) %>
-      <%= link_to t("active_billing.nav.plan", default: "Plan"), plan_path(current_scope_params) %>
-    <% end %>
-  </nav>
+<body class="h-full">
 
-  <% if flash.any? %>
-    <div class="active-billing-flash">
-      <% flash.each do |type, message| %>
-        <p class="flash-<%= type %>"><%= message %></p>
-      <% end %>
+<% has_scope = respond_to?(:current_scope_params) && current_scope_params[:billable_entity_id].present? %>
+<% def nav_class(active) = "group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold #{active ? 'bg-white/5 text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}" %>
+
+<el-dialog>
+  <dialog id="sidebar" class="backdrop:bg-transparent lg:hidden">
+    <el-dialog-backdrop class="fixed inset-0 bg-gray-900/80 transition-opacity duration-300 ease-linear data-closed:opacity-0"></el-dialog-backdrop>
+    <div tabindex="0" class="fixed inset-0 flex focus:outline-none">
+      <el-dialog-panel class="group/dialog-panel relative mr-16 flex w-full max-w-xs flex-1 transform transition duration-300 ease-in-out data-closed:-translate-x-full">
+        <div class="absolute top-0 left-full flex w-16 justify-center pt-5 duration-300 ease-in-out group-data-closed/dialog-panel:opacity-0">
+          <button type="button" command="close" commandfor="sidebar" class="-m-2.5 p-2.5">
+            <span class="sr-only">Close sidebar</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" class="size-6 text-white">
+              <path d="M6 18 18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
+        </div>
+        <div class="flex grow flex-col gap-y-5 overflow-y-auto bg-gray-900 px-6 pb-2 ring-1 ring-white/10">
+          <div class="flex h-16 shrink-0 items-center">
+            <span class="text-white font-semibold text-lg">ActiveBilling</span>
+          </div>
+          <nav class="flex flex-1 flex-col">
+            <ul role="list" class="-mx-2 space-y-1">
+              <% if has_scope %>
+                <li>
+                  <%= link_to invoices_path(current_scope_params), class: nav_class(controller_name == "invoices") do %>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" class="size-6 shrink-0">
+                      <path d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <%= t("active_billing.nav.invoices", default: "Invoices") %>
+                  <% end %>
+                </li>
+                <li>
+                  <%= link_to usages_path(current_scope_params), class: nav_class(controller_name == "usages") do %>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" class="size-6 shrink-0">
+                      <path d="M10.5 6a7.5 7.5 0 1 0 7.5 7.5h-7.5V6Z" stroke-linecap="round" stroke-linejoin="round" />
+                      <path d="M13.5 10.5H21A7.5 7.5 0 0 0 13.5 3v7.5Z" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <%= t("active_billing.nav.usages", default: "Usages") %>
+                  <% end %>
+                </li>
+                <li>
+                  <%= link_to charges_path(current_scope_params), class: nav_class(controller_name == "charges") do %>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" class="size-6 shrink-0">
+                      <path d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <%= t("active_billing.nav.charges", default: "Charges") %>
+                  <% end %>
+                </li>
+                <li>
+                  <%= link_to plan_path(current_scope_params), class: nav_class(controller_name == "plans") do %>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" class="size-6 shrink-0">
+                      <path d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <%= t("active_billing.nav.plan", default: "Plan") %>
+                  <% end %>
+                </li>
+              <% end %>
+            </ul>
+          </nav>
+        </div>
+      </el-dialog-panel>
     </div>
-  <% end %>
+  </dialog>
+</el-dialog>
 
-  <main>
+<div class="hidden bg-gray-900 lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col">
+  <div class="flex grow flex-col gap-y-5 overflow-y-auto border-r border-white/10 px-6">
+    <div class="flex h-16 shrink-0 items-center">
+      <span class="text-white font-semibold text-lg">ActiveBilling</span>
+    </div>
+    <nav class="flex flex-1 flex-col">
+      <ul role="list" class="flex flex-1 flex-col gap-y-7">
+        <li>
+          <ul role="list" class="-mx-2 space-y-1">
+            <% if has_scope %>
+              <li>
+                <%= link_to invoices_path(current_scope_params), class: nav_class(controller_name == "invoices") do %>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" class="size-6 shrink-0">
+                    <path d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                  <%= t("active_billing.nav.invoices", default: "Invoices") %>
+                <% end %>
+              </li>
+              <li>
+                <%= link_to usages_path(current_scope_params), class: nav_class(controller_name == "usages") do %>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" class="size-6 shrink-0">
+                    <path d="M10.5 6a7.5 7.5 0 1 0 7.5 7.5h-7.5V6Z" stroke-linecap="round" stroke-linejoin="round" />
+                    <path d="M13.5 10.5H21A7.5 7.5 0 0 0 13.5 3v7.5Z" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                  <%= t("active_billing.nav.usages", default: "Usages") %>
+                <% end %>
+              </li>
+              <li>
+                <%= link_to charges_path(current_scope_params), class: nav_class(controller_name == "charges") do %>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" class="size-6 shrink-0">
+                    <path d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                  <%= t("active_billing.nav.charges", default: "Charges") %>
+                <% end %>
+              </li>
+              <li>
+                <%= link_to plan_path(current_scope_params), class: nav_class(controller_name == "plans") do %>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" class="size-6 shrink-0">
+                    <path d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                  <%= t("active_billing.nav.plan", default: "Plan") %>
+                <% end %>
+              </li>
+            <% end %>
+          </ul>
+        </li>
+      </ul>
+    </nav>
+  </div>
+</div>
+
+<div class="sticky top-0 z-40 flex items-center gap-x-6 bg-gray-900 px-4 py-4 shadow-sm sm:px-6 lg:hidden">
+  <button type="button" command="show-modal" commandfor="sidebar" class="-m-2.5 p-2.5 text-gray-400 hover:text-white">
+    <span class="sr-only">Open sidebar</span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" class="size-6">
+      <path d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  </button>
+  <div class="flex-1 text-sm/6 font-semibold text-white">ActiveBilling</div>
+</div>
+
+<main class="py-10 lg:pl-72">
+  <div class="px-4 sm:px-6 lg:px-8">
+    <% if flash.any? %>
+      <div class="mb-6 space-y-2">
+        <% flash.each do |type, message| %>
+          <div class="rounded-md <%= type.to_s == "alert" ? "bg-red-900/50 ring-1 ring-red-500/30" : "bg-green-900/50 ring-1 ring-green-500/30" %> p-4">
+            <p class="text-sm font-medium <%= type.to_s == "alert" ? "text-red-300" : "text-green-300" %>"><%= message %></p>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+
     <%= yield %>
-  </main>
+  </div>
+</main>
+
 </body>
 </html>

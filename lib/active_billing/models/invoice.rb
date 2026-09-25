@@ -1,5 +1,6 @@
 module ActiveBilling
   class Invoice < ActiveRecord::Base
+    include Discard::Model
     include Concerns::TimestampStoreAccessor
     include Concerns::NfeDescription
 
@@ -64,6 +65,18 @@ module ActiveBilling
 
     def issuable?
       created? || failed?
+    end
+
+    def issue!
+      raise ActiveBilling::Error, "invoice cannot be issued" unless issuable?
+
+      issued!
+    end
+
+    def cancel!
+      raise ActiveBilling::Error, "invoice cannot be cancelled" unless cancellable?
+
+      cancelled!
     end
 
     def add_usages_ids

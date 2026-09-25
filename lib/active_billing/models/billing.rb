@@ -1,5 +1,7 @@
 module ActiveBilling
   class Billing < ActiveRecord::Base
+    include Discard::Model
+
     enum :state, {
       open: "open",
       finalized: "finalized"
@@ -21,6 +23,18 @@ module ActiveBilling
       return if entity.nil?
 
       for_billable_entity(entity.class.name, entity.id).open.order(:created_at).last
+    end
+
+    def associate_plan!(new_plan)
+      raise ActiveBilling::Error, "billing is not open" unless open?
+
+      update!(plan: new_plan)
+    end
+
+    def finalize!
+      raise ActiveBilling::Error, "billing is not open" unless open?
+
+      finalized!
     end
 
     private
