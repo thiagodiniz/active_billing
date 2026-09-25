@@ -1,6 +1,9 @@
+require "discard"
+
 require "active_billing/version"
 require "active_billing/money"
 require "active_billing/engine"
+require "active_billing/invoice_pdf"
 
 require "active_billing/concerns/nfe_description"
 require "active_billing/concerns/timestamp_store_accessor"
@@ -35,7 +38,11 @@ module ActiveBilling
                   :invoice_description,
                   :parent_controller,
                   :api_enabled,
-                  :api_authorizer
+                  :api_authorizer,
+                  :company,
+                  :invoice_recipient,
+                  :invoice_pdf_footer,
+                  :invoice_pdf_page_size
 
     def initialize
       @currency               = :BRL
@@ -48,6 +55,10 @@ module ActiveBilling
       @parent_controller      = "ActionController::Base"
       @api_enabled            = false
       @api_authorizer         = nil
+      @company                = nil
+      @invoice_recipient      = nil
+      @invoice_pdf_footer     = nil
+      @invoice_pdf_page_size  = "A4"
     end
   end
 end

@@ -91,6 +91,10 @@ module ActiveBilling
       ActiveBilling::Usage.where(id: add_usages_ids)
     end
 
+    def to_pdf
+      ActiveBilling::InvoicePdf.new(self).render
+    end
+
     private
 
     def set_description

@@ -39,5 +39,23 @@ RSpec.describe "ActiveBilling::Invoices", type: :request do
           params: { billable_entity_id: store.id, billable_entity_type: "Store" }
       expect(response).to have_http_status(:ok)
     end
+
+    context "when requesting a PDF" do
+      around do |example|
+        original = ActiveBilling.configuration.dup
+        ActiveBilling.configuration.company = { name: "Example, LLC", email: "billing@example.com" }
+        example.run
+      ensure
+        ActiveBilling.configuration = original
+      end
+
+      it "responds with a PDF document" do
+        get "/active_billing/invoices/#{invoice.id}.pdf",
+            params: { billable_entity_id: store.id, billable_entity_type: "Store" }
+
+        expect(response.media_type).to eq("application/pdf")
+        expect(response.body).to start_with("%PDF")
+      end
+    end
   end
 end
