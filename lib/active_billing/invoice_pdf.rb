@@ -88,8 +88,7 @@ module ActiveBilling
     end
 
     def custom_recipient
-      custom = config.invoice_recipient
-      Array(custom.call(invoice)) if custom.respond_to?(:call)
+      Array(config.invoice_recipient.call(invoice)) if config.invoice_recipient.respond_to?(:call)
     end
 
     def entity_recipient
@@ -109,9 +108,7 @@ module ActiveBilling
 
     def item_rows
       rows = invoice.items.map { |item| item_row(item) }
-      return rows if rows.any?
-
-      [[escape(invoice.description), nil, nil, format_cents(invoice.amount_in_cents)]]
+      rows.presence || [[escape(invoice.description), nil, nil, format_cents(invoice.amount_in_cents)]]
     end
 
     def item_row(item)
