@@ -1,11 +1,6 @@
 module ActiveBilling
   class Event < ActiveRecord::Base
-    belongs_to :resource, polymorphic: true
-    belongs_to :resource_with_discarded, -> { with_discarded },
-               polymorphic: true,
-               foreign_key: "resource_id",
-               foreign_type: "resource_type",
-               optional: true
+    belongs_to :resource, polymorphic: true, optional: true
     belongs_to :usage, class_name: "ActiveBilling::Usage",
                        foreign_key: "billing_usage_id",
                        inverse_of: :events

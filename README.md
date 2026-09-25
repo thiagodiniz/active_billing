@@ -134,6 +134,18 @@ ActiveBilling.configure do |config|
   # Return a truthy scope object to authorize the request; return a falsy value to
   # reject it with 401. When api_authorizer is nil, the API rejects with 403.
   config.api_authorizer = ->(api_key, _request) { ApiToken.find_by(token: api_key) }
+  # Base controller for the portal pages. Point it at your own controller so the
+  # portal inherits your authentication, layout and CSRF configuration.
+  config.parent_controller = "ActionController::Base"
+
+  # Optional invoice description template (String or callable receiving the invoice).
+  # Supports %{month} and %{uuids}.
+  config.invoice_description = nil
+
+  # Standalone mode (planned): enable the mountable API and set auth callable.
+  # The config keys exist today; the API controllers/serializers are not yet shipped.
+  config.api_enabled    = false
+  config.api_authorizer = ->(request) { ApiToken.find_by(token: request.headers["X-Api-Key"]) }
 end
 ```
 
@@ -245,7 +257,7 @@ charge.mark_paid!(paid_at: Time.current)
 
 ## Web UI (portal)
 
-The engine ships a **read-only portal** that a host app gets for free once the engine is mounted. Every list is scoped to a billable entity via the `billable_entity_id` query param (and `billable_entity_type`, unless `config.billable_entity_class` is set). Authentication is intentionally out of scope — wrap the routes with your own app's auth.
+The engine ships a **read-only portal** that a host app gets for free once the engine is mounted. Every list is scoped to a billable entity via the `billable_entity_id` query param (and `billable_entity_type`, unless `config.billable_entity_class` is set). Authentication is intentionally out of scope — wrap the routes with your own app's auth, and set `config.parent_controller` so the portal controllers inherit it.
 
 Mounted at the engine's path (e.g. `/billing`):
 

@@ -29,7 +29,6 @@ active_billing/
 │   │   ├── engine.rb                # Rails engine (mountable for standalone mode)
 │   │   │
 │   │   ├── concerns/                # Shared model behaviors
-│   │   │   ├── chargeable.rb        # Payment-related behavior
 │   │   │   ├── nfe_description.rb   # Brazilian fiscal invoice description (opt-in)
 │   │   │   └── timestamp_store_accessor.rb  # Email tracking via hstore
 │   │   │
@@ -136,9 +135,8 @@ Located in `lib/active_billing/models/` and autoloaded by the engine (Zeitwerk `
 
 Located in `lib/active_billing/concerns/`:
 
-1. **chargeable.rb** — payment-related associations + scopes
-2. **nfe_description.rb** — Brazilian fiscal invoice description (opt-in)
-3. **timestamp_store_accessor.rb** — email tracking timestamps in hstore
+1. **nfe_description.rb** — Brazilian fiscal invoice description (opt-in)
+2. **timestamp_store_accessor.rb** — email tracking timestamps in hstore
 
 ### Money type
 
@@ -228,8 +226,7 @@ The standalone JSON API is part of the intended design and is **not yet implemen
 
 ### Runtime
 
-- `rails` (>= 6.0)
-- `discard` (~> 1.2) — soft deletes
+- `rails` (>= 7.0)
 
 ### Development
 

@@ -44,13 +44,13 @@ module ActiveBilling
     has_many :usages, -> { distinct }, through: :items
 
     validates :state, exclusion: { in: %w[cancelled] }, unless: :cancellable?
-    validates :amount_in_cents, comparison: { greater_than: 0 }
+    validates :amount_in_cents, comparison: { greater_than_or_equal_to: 0 }
     validates :description, presence: true
+    validate :items_must_be_editable
     validate :usages_belong_to_same_entity
 
     before_validation :set_issued_at
-    before_validation :remove_items_from_removed_usages
-    before_validation :add_items_from_added_usages
+    before_validation :sync_items_with_usages
     before_validation :set_amount
     before_validation :set_description
 
@@ -80,15 +80,11 @@ module ActiveBilling
     end
 
     def add_usages_ids
-      return self[:add_usages_ids] if self[:add_usages_ids].present?
-
-      self[:add_usages_ids] = usage_ids
-      self[:add_usages_ids]
+      self[:add_usages_ids] ||= usage_ids
     end
 
     def add_usages_ids=(ids)
-      super(ids)
-      super(add_usages_ids.compact)
+      super(Array(ids).compact)
     end
 
     def add_usages
@@ -111,8 +107,12 @@ module ActiveBilling
       usage_uuids = uuid_month.map { |i| i[0] }.join(", #")
       self.description = format(
         nfe_resource_description,
-        { month: I18n.l(month, format: :month), uuids: usage_uuids }
+        { month: I18n.l(month, format: month_format), uuids: usage_uuids }
       )
+    end
+
+    def month_format
+      I18n.t("active_billing.invoice.month_format", default: "%B %Y")
     end
 
     def set_issued_at
@@ -122,33 +122,54 @@ module ActiveBilling
       self.issued_at = Date.current
     end
 
-    def remove_items_from_removed_usages
-      to_remove = usage_ids.difference(add_usages_ids)
+    # Reconciles line items with `add_usages_ids` in memory only: removed items are
+    # marked for destruction and new ones are built, so nothing is written until the
+    # record is saved and everything happens inside the save transaction.
+    def sync_items_with_usages
+      return unless items_changed?
+      return unless issuable?
 
-      return if to_remove.empty?
-      return errors.add(:items, :invalid, message: "cannot be changed after invoice is issued") unless issuable?
-
-      items.where(usage_id: to_remove).destroy_all
+      obsolete_items.each(&:mark_for_destruction)
+      build_items_for(pending_usage_ids)
     end
 
-    def add_items_from_added_usages
-      to_add = add_usages_ids.difference(usage_ids)
-      return if to_add.blank?
-      return errors.add(:items, :invalid, message: "cannot change items after is issued") unless issuable?
+    def items_changed?
+      pending_usage_ids.any? || obsolete_items.any?
+    end
 
-      items_from_usages = ActiveBilling::Usage.where(id: to_add).map(&:to_invoice_items_attributes).flatten
-      if items_from_usages.blank?
-        return errors.add(:items, :blank, message: "items cannot be blank when usages are informed")
-      end
+    def live_items
+      items.reject(&:marked_for_destruction?)
+    end
 
-      self.items_attributes = items_from_usages
+    def pending_usage_ids
+      add_usages_ids - live_items.filter_map(&:usage_id)
+    end
+
+    def obsolete_items
+      live_items.select { |item| item.usage_id.present? && add_usages_ids.exclude?(item.usage_id) }
+    end
+
+    def build_items_for(usage_ids_to_add)
+      return if usage_ids_to_add.empty?
+
+      attributes = ActiveBilling::Usage.where(id: usage_ids_to_add).flat_map(&:to_invoice_items_attributes)
+      return errors.add(:items, :blank, message: "cannot be blank when usages are informed") if attributes.empty?
+
+      attributes.each { |item_attributes| items.build(item_attributes) }
     end
 
     def set_amount
-      return if items.empty?
       return unless issuable?
+      return if live_items.empty?
 
-      self.amount_in_cents = ActiveBilling::Money.from_amount(items.sum(&:price))
+      self.amount_in_cents = ActiveBilling::Money.from_amount(live_items.sum(&:price))
+    end
+
+    def items_must_be_editable
+      return if issuable?
+      return unless items_changed?
+
+      errors.add(:items, :invalid, message: "cannot be changed after the invoice is issued")
     end
 
     def usages_belong_to_same_entity

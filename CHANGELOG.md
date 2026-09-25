@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (code review follow-up)
+- `Invoice` no longer writes to the database while validating. `remove_items_from_removed_usages`/`add_items_from_added_usages` ran `destroy_all` in a `before_validation` callback, so a bare `invoice.valid?` deleted `InvoiceItem` rows outside any transaction. Item reconciliation is now in-memory (`mark_for_destruction` + `items.build`) and applied by autosave when the record is saved.
+- `Invoice#add_usages_ids` treated an assigned `[]` as "keep the current usages", making it impossible to remove every usage.
+- `Invoice` accepts a zero amount (`greater_than_or_equal_to: 0`), so credited and free-trial invoices are valid.
+- `Invoice#set_description` no longer raises `I18n::MissingTranslationData`: the date format is shipped as `active_billing.invoice.month_format` instead of relying on an `en.date.formats.month` the gem never defined.
+- `Concerns::NfeDescription` no longer assumes the resource responds to the configured `billing_entity_method`; it raised `NoMethodError` for any host model without it.
+- `Usage` declares `belongs_to :billable_entity, polymorphic: true` — the columns and scopes existed but the association did not, so `usage.billable_entity` raised `NoMethodError`.
+- `Event#resource` is `optional: true`, matching the nullable column.
+
+### Removed
+- `Concerns::Chargeable`. It could not be included by any model: it declared `has_one :charge, as: :chargeable` against a table with `resource_type/resource_id`, a `gateway_wallet` association with no model, scopes delegating to `Charge` scopes that do not exist, a join aliasing a table it never aliased, and ~25 delegations to non-existent columns. It will come back with the `Charge` state machine.
+- `discard` and `jbuilder` runtime dependencies (only the deleted concern used `discard`; nothing used `jbuilder`), along with `Event#resource_with_discarded`.
+
+### Added
+- `config.parent_controller` — the portal controllers inherit from it, so the host app's authentication, layout and CSRF configuration apply to engine pages.
+- `config.invoice_description` — String or callable used as the invoice description template, replacing host-specific method probing.
+
+### Changed
+- The gemspec declares `rails >= 7.0` and `required_ruby_version >= 3.2`. The code uses `enum :state, {...}` with `default:`, `Date#before?` and `Migration[7.0]`, none of which work on the previously declared Rails 6.0.
+
 This release reframes the gem around a **Billing** entity that owns one configured billing cycle, snapshots a **Plan**, aggregates closed **Usages**, and accepts adjustments before producing an Invoice. The gem also gains a first-class **standalone mode**: the same engine can be mounted in a thin Rails app to expose a JSON API consumed by external products.
 
 > **Implementation status.** Entries below describe the intended design. Items not yet shipped are tagged **(planned)**; everything else in this section reflects code that exists today. See **Implemented in this release** for the concrete surface area added now.

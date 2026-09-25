@@ -28,6 +28,7 @@ en:
       items: "Line items"
       no_items: "No line items."
       nfe_usage_description: "Usage charges for %{month} (%{uuids})"
+      month_format: "%B %Y"
       states:
         created: "Created"
         processing: "Processing"
