@@ -46,7 +46,7 @@ module ActiveBilling
 
     def company
       company = config.company
-      return company if company.present? && company[:name].present?
+      return { email: nil }.merge(company) if company.present? && company[:name].present?
 
       raise ActiveBilling::Error, "config.company must be set with at least :name to render invoice PDFs"
     end

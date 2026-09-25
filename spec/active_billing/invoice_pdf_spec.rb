@@ -24,6 +24,14 @@ RSpec.describe ActiveBilling::InvoicePdf do
       expect(pdf.render).to start_with("%PDF")
     end
 
+    context "with a company without email" do
+      let(:company) { { name: "Example, LLC" } }
+
+      it "returns a PDF document" do
+        expect(pdf.render).to start_with("%PDF")
+      end
+    end
+
     context "without company configured" do
       let(:company) { nil }
 
