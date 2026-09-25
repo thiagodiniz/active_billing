@@ -1,3 +1,5 @@
+require "discard"
+
 require "active_billing/version"
 require "active_billing/money"
 require "active_billing/engine"

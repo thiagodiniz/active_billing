@@ -21,6 +21,7 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = ">= 3.2"
 
   spec.add_dependency "rails", ">= 7.0"
+  spec.add_dependency "discard", "~> 1.3"
   spec.add_dependency "receipts", "~> 2.4"
   spec.add_dependency "matrix" # required by prawn on Ruby >= 3.1
 
