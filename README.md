@@ -2,7 +2,7 @@
 
 A Rails-focused Ruby gem for SaaS billing. ActiveBilling manages billing cycles, tracks plan-based and usage-based consumption, closes cycles, generates invoices, and records payment. It runs **embedded** inside an existing Rails application (models, controllers, jobs, helpers) or **standalone** as a thin billing service that receives input from external apps over a JSON API.
 
-> **Implementation status.** This README documents both the shipped surface and the intended design. What's implemented today: the core models (`Plan`, `Billing`, `Usage`, `Event`, `Invoice`, `InvoiceItem`, `Charge`), the polymorphic billable-entity model, `billable_entity` scoping, and a **read-only portal web UI** with **override generators** (see [Web UI](#web-ui-portal)). Still **planned**: the Billing lifecycle helpers (`close!`, `finalize!`, …), `BillingLineItem` adjustments, and the **standalone JSON API**. Planned sections below are marked as such. See [CHANGELOG.md](CHANGELOG.md) for the authoritative status.
+> **Implementation status.** This README documents both the shipped surface and the intended design. What's implemented today: the core models (`Plan`, `Billing`, `Usage`, `Event`, `Invoice`, `InvoiceItem`, `Charge`), the polymorphic billable-entity model, `billable_entity` scoping, a **read-only portal web UI**, and the **standalone JSON API** (see [Standalone usage](#standalone-usage)) — all with **override generators**. Partial lifecycle helpers are shipped as guarded transitions (`Billing#finalize!`, `Usage#close!`, `Invoice#issue!`/`#cancel!`); still **planned**: `BillingLineItem` adjustments and the **Charge state machine**. Planned sections below are marked as such. See [CHANGELOG.md](CHANGELOG.md) for the authoritative status.
 
 ## Core concepts
 
@@ -60,13 +60,13 @@ Charge (payment state machine)
 
 ### Embedded mode
 
-ActiveBilling installs as a Rails engine inside your app. Your Rails code talks to `ActiveBilling::Billing`, `ActiveBilling::Usage`, etc. directly — same models, jobs, helpers as anything else in the app.
+ActiveBilling installs as a Rails engine inside your app. You **drive billing from code**, talking to `ActiveBilling::Billing`, `ActiveBilling::Usage`, etc. directly — same models, jobs, helpers as anything else in the app. On top of that you get a **read-only portal** (`index`/`show`) to *follow* those entities — the UI is for visibility, not management, which is why it ships no create/update/destroy screens. Management happens in your code.
 
 Use this when billing is part of the same Rails monolith as the product.
 
 ### Standalone mode
 
-The same gem can be `mount`ed inside a thin Rails app to run as a separate billing service. External applications push events and issue billing commands over a JSON API (token-authenticated). The gem ships the engine, routes, controllers, and serializers; the host app supplies auth tokens and any persistence configuration.
+The same gem can be `mount`ed inside a thin Rails app to run as a separate billing service. Beyond code-level control, other apps in your ecosystem drive billing over the **JSON API** (see [Standalone usage](#standalone-usage)): a versioned, token-authenticated surface with **almost full control** of every model. It is **not a raw CRUD passthrough** — it runs the same domain logic and **respects the business rules and model validations** (soft deletes, one-usage-per-cycle, append-only events, the invoice state machine, and so on). The gem ships the engine, routes, controllers, and jbuilder serializers; the host app supplies the auth callable.
 
 Use this when multiple products share one billing service, or when billing needs to run in its own deployable.
 
@@ -126,6 +126,14 @@ ActiveBilling.configure do |config|
   # billable_entity_type query param is omitted (e.g. "Customer", "Store").
   config.billable_entity_class = nil
 
+  # Standalone mode: master switch for the mountable JSON API. While false, every
+  # API route responds 404.
+  config.api_enabled = false
+
+  # Callable invoked on every API request: ->(api_key, request) { scope }.
+  # Return a truthy scope object to authorize the request; return a falsy value to
+  # reject it with 401. When api_authorizer is nil, the API rejects with 403.
+  config.api_authorizer = ->(api_key, _request) { ApiToken.find_by(token: api_key) }
   # Base controller for the portal pages. Point it at your own controller so the
   # portal inherits your authentication, layout and CSRF configuration.
   config.parent_controller = "ActionController::Base"
@@ -287,36 +295,63 @@ bin/rails generate active_billing:controllers
 bin/rails generate active_billing:install
 ```
 
+The JSON API is overridable the same way. Eject a single resource (pre-filled with the
+default behavior) and customize just that one without forking the gem — Rails resolves
+your app's copy ahead of the engine's:
+
+```bash
+# One API controller (e.g. charges) into app/controllers/active_billing/api/v1/:
+bin/rails generate active_billing:api_controller charges
+
+# One resource's jbuilder views into app/views/active_billing/api/v1/<resource>/:
+bin/rails generate active_billing:api_views invoices
+
+# The API base controller (for cross-cutting overrides such as custom auth):
+bin/rails generate active_billing:api_base
+```
+
 ## Standalone usage
 
-> **Planned.** The JSON API described in this section is **not yet implemented** — the `config.api_enabled` / `config.api_authorizer` keys exist, but the versioned controllers and serializers are on the roadmap. The example requests below document the intended contract.
-
-In standalone mode, external services interact with the engine over JSON. All endpoints are prefixed by the mount path (`/billing` below) and require the configured API auth header.
+Enable the API with `config.api_enabled = true` and a `config.api_authorizer` (see
+[Configuration](#configuration)). Every request carries an `X-Api-Key` header; endpoints
+are prefixed by the mount path (`/billing` below) and versioned under `/api/v1`.
 
 ```http
-POST /billing/api/v1/billings
+POST /billing/api/v1/plans
 Content-Type: application/json
 X-Api-Key: <token>
 
-{
-  "billable_entity": { "type": "Customer", "id": "cus_123" },
-  "plan_id": "plan_pro",
-  "cycle_start": "2026-05-01",
-  "cycle_end":   "2026-05-31",
-  "interval":    "monthly"
-}
+{ "plan": { "name": "Pro", "price_in_cents": 9900, "interval": "monthly" } }
 ```
 
-```http
-POST /billing/api/v1/billings/:id/events
-{ "kind": "api_call", "metadata": { "endpoint": "/v1/users" }, "chargeable": true }
+The API exposes every model with **full CRUD, guarded by the domain rules**. Custom
+transitions are modeled as REST noun sub-resources.
 
-POST /billing/api/v1/billings/:id/close
-POST /billing/api/v1/billings/:id/finalize
-GET  /billing/api/v1/invoices/:id
+| Resource | Endpoints | Domain guards |
+| -------- | --------- | ------------- |
+| Plans | `GET/POST /plans`, `GET/PATCH/DELETE /plans/:id` | `DELETE` hard-deletes only if the plan was never used; otherwise it is **deactivated** (`active: false`). |
+| Billings | `GET/POST /billings`, `GET/PATCH/DELETE /billings/:id`, `PUT /billings/:id/plan`, `POST /billings/:id/finalization` | `DELETE` is a **soft delete**. `plan`/`finalization` only while `open` (else `409`). |
+| Usages | `GET/POST /usages`, `GET/PATCH/DELETE /usages/:id`, `POST /usages/:id/closure` | One usage per billing cycle (`409` on duplicate). `DELETE` only when empty. A closed usage is immutable. |
+| Events | `GET/POST /events`, `GET/DELETE /events/:id` | **Append-only**: no update. Cannot be added to a closed usage. |
+| Invoices | `GET/POST /invoices`, `GET/PATCH/DELETE /invoices/:id`, `POST /invoices/:id/issuance`, `POST /invoices/:id/cancellation` | `DELETE` is a **soft delete**. `PATCH`/items only while issuable; `cancellation` only while `cancellable?`. |
+| Invoice items | `GET/POST /invoices/:id/items`, `GET/PATCH/DELETE /invoices/:id/items/:id` | Writes rejected once the invoice is issued (`409`). |
+| Charges | `GET/POST /charges`, `GET/PATCH/DELETE /charges/:id`, `POST /charges/:id/payment` | `DELETE` is a **soft delete**. `payment` returns `501` until the Charge state machine ships. |
+
+Index actions accept optional `billable_entity_type` / `billable_entity_id` query params
+to scope results to one entity.
+
+Errors use a consistent envelope:
+
+```json
+{ "error": { "code": "validation_failed", "message": "...", "details": { "field": ["..."] } } }
 ```
 
-Embedded callers get the same behavior by calling the model methods directly; standalone callers get it over HTTP. Both paths exercise identical domain logic.
+Status codes: `401` (bad/missing key), `403` (no `api_authorizer` configured), `404`
+(API disabled or record not found), `409` (illegal transition / conflict), `422`
+(validation), `501` (roadmap endpoint).
+
+Embedded callers get the same behavior by calling the model methods directly; standalone
+callers get it over HTTP. Both paths exercise identical domain logic.
 
 ## Payments
 

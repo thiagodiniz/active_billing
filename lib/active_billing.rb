@@ -22,6 +22,11 @@ module ActiveBilling
   end
 
   class Configuration
+    # api_enabled     — master switch for the standalone JSON API (mounted routes
+    #                   respond 404 while false).
+    # api_authorizer  — callable `->(api_key, request) { scope }` invoked on every API
+    #                   request. Return a truthy scope object to authorize (falsy → 401).
+    #                   When nil, the API rejects every request with 403.
     attr_accessor :currency,
                   :default_penalty,
                   :default_interest,

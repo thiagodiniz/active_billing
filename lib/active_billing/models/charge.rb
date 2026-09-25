@@ -1,5 +1,7 @@
 module ActiveBilling
   class Charge < ActiveRecord::Base
+    include Discard::Model
+
     attribute :default_penalty, default: -> { ActiveBilling.configuration.default_penalty }
     attribute :default_interest, default: -> { ActiveBilling.configuration.default_interest }
 

@@ -6,8 +6,8 @@ ActiveBilling is a Rails engine gem for SaaS billing. It manages **billing cycle
 
 The gem supports two install modes from the same codebase:
 
-- **Embedded** — installed into an existing Rails app; models/jobs/controllers used directly.
-- **Standalone** — `mount ActiveBilling::Engine` in a thin Rails app to run as a billing service with a JSON API consumed by external products.
+- **Embedded** — installed into an existing Rails app; models/jobs/controllers used directly. The developer drives billing from code; the shipped **portal is deliberately read-only** (`index`/`show` only) — it exists to *follow* entities, not manage them. Do **not** add create/update/destroy screens to the ERB portal.
+- **Standalone** — `mount ActiveBilling::Engine` in a thin Rails app to run as a billing service with a JSON API consumed by external products. The **JSON API (`ActiveBilling::Api::V1`) is the write surface** — full CRUD guarded by the domain rules (soft deletes, one-usage-per-cycle, append-only events, the invoice state machine). Custom transitions are REST noun sub-resources (e.g. `POST /charges/:id/payment`). Every API controller/view is override-generatable.
 
 ### Domain model (read before editing models)
 
@@ -24,6 +24,24 @@ The gem supports two install modes from the same codebase:
 Lifecycle: **configure Billing → record Events → close Usage → adjust Billing → finalize → Invoice → Charge.** Never bypass this order in new code.
 
 Model naming is locked — do not rename `Usage`, `Event`, `Invoice`, `InvoiceItem`, or `Charge`. `Billing` and `Plan` are the only new top-level models.
+
+## UI Component Library
+
+HTML components live in `app/views/components/` — see `app/views/components/AGENTS.md` for the full index.
+
+**Active components (already wired into views):**
+
+| Component file | Used in |
+|---|---|
+| `application-shells/sidebar/02-simple-dark-sidebar.html` | `app/views/layouts/active_billing/application.html.erb` (site shell) |
+| `lists/tables/05-with-striped-rows.html` | All index views (`invoices/`, `usages/`, `charges/`) |
+| `page-examples/detail-screens/02-stacked.html` | `app/views/active_billing/invoices/show.html.erb` |
+
+**Conventions:**
+- The layout loads Tailwind CDN + `@tailwindplus/elements` for custom web components (`<el-dialog>`, `<el-dropdown>`, etc.)
+- Background is dark (`bg-gray-900`); text uses `text-white` / `text-gray-400` palette
+- Table body rows use `even:bg-gray-800/50` for stripes; links use `text-indigo-400 hover:text-indigo-300`
+- When asked to use a component, reference it **by filename** (e.g. `03-simple-in-card.html`)
 
 ## Commands
 
