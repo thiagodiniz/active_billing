@@ -55,6 +55,14 @@ RSpec.describe ActiveBilling::InvoicePdf do
         expect(pdf.recipient).to eq(["Custom", invoice.uuid])
       end
     end
+
+    context "with markup in the entity name" do
+      let(:store) { create(:store, name: "<link href='http://evil'>Acme</link>") }
+
+      it "escapes the value" do
+        expect(pdf.recipient).to eq(["&lt;link href=&#39;http://evil&#39;&gt;Acme&lt;/link&gt;"])
+      end
+    end
   end
 
   describe "#line_items" do
@@ -70,9 +78,30 @@ RSpec.describe ActiveBilling::InvoicePdf do
       end
     end
 
+    context "with markup in the item key" do
+      before { create(:active_billing_invoice_item, invoice: invoice, key: "<b>bold</b>", quantity: 1, unit_price: 1) }
+
+      it "escapes the value" do
+        expect(pdf.line_items[1].first).to eq("&lt;b&gt;bold&lt;/b&gt;")
+      end
+    end
+
     context "without items" do
       it "falls back to the invoice description" do
         expect(pdf.line_items[1]).to eq(["Test invoice", nil, nil, "BRL 15.00"])
+      end
+    end
+
+    context "with an untranslated locale" do
+      around do |example|
+        I18n.enforce_available_locales = false
+        I18n.with_locale(:"pt-BR") { example.run }
+      ensure
+        I18n.enforce_available_locales = true
+      end
+
+      it "falls back to English labels" do
+        expect(pdf.line_items.last[2]).to eq("<b>Total</b>")
       end
     end
   end
