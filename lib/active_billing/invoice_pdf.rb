@@ -41,7 +41,7 @@ module ActiveBilling
         [t("state"), state_label],
         [t("period"), period],
         [t("nfe_number"), invoice.nfe_number]
-      ].select { |_label, value| value.present? }
+      ].select { |_label, value| value.present? }.map { |label, value| [label, escape(value)] }
     end
 
     def company
@@ -52,13 +52,7 @@ module ActiveBilling
     end
 
     def recipient
-      custom = config.invoice_recipient
-      return Array(custom.call(invoice)) if custom.respond_to?(:call)
-
-      entity = invoice.billing&.billable_entity || invoice.resource
-      return [] if entity.nil?
-
-      RECIPIENT_ATTRIBUTES.filter_map { |attribute| entity_value(entity, attribute) }
+      recipient_lines.filter_map { |line| escape(line) }
     end
 
     def line_items
@@ -91,6 +85,16 @@ module ActiveBilling
       [I18n.l(start), finish && I18n.l(finish)].compact.join(" - ")
     end
 
+    def recipient_lines
+      custom = config.invoice_recipient
+      return Array(custom.call(invoice)) if custom.respond_to?(:call)
+
+      entity = invoice.billing&.billable_entity || invoice.resource
+      return [] if entity.nil?
+
+      RECIPIENT_ATTRIBUTES.map { |attribute| entity_value(entity, attribute) }
+    end
+
     def entity_value(entity, attribute)
       entity.public_send(attribute).presence if entity.respond_to?(attribute)
     end
@@ -103,11 +107,11 @@ module ActiveBilling
       rows = invoice.items.map { |item| item_row(item) }
       return rows if rows.any?
 
-      [[invoice.description, nil, nil, format_cents(invoice.amount_in_cents)]]
+      [[escape(invoice.description), nil, nil, format_cents(invoice.amount_in_cents)]]
     end
 
     def item_row(item)
-      [item.description.presence || item.key, money(item.unit_price), item.quantity.to_s, money(item.price)]
+      [escape(item.description.presence || item.key), money(item.unit_price), item.quantity.to_s, money(item.price)]
     end
 
     def total_row
@@ -123,11 +127,19 @@ module ActiveBilling
     end
 
     def bold(text)
-      "<b>#{text}</b>"
+      "<b>#{escape(text)}</b>"
+    end
+
+    # Prawn parses inline markup (<b>, <link>, ...) in table cells.
+    def escape(text)
+      return if text.nil?
+
+      text.to_s.gsub("&", "&amp;").gsub("<", "&lt;").gsub(">", "&gt;")
     end
 
     def t(key)
-      I18n.t("active_billing.invoice.pdf.#{key}")
+      I18n.t("active_billing.invoice.pdf.#{key}", default: nil) ||
+        I18n.t("active_billing.invoice.pdf.#{key}", locale: :en)
     end
   end
 end

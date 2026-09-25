@@ -55,6 +55,22 @@ RSpec.describe ActiveBilling::InvoicePdf do
         expect(pdf.recipient).to eq(["Custom", invoice.uuid])
       end
     end
+
+    context "with markup in the entity name" do
+      let(:store) { create(:store, name: "<link href='http://evil'>Acme</link> & Co") }
+
+      it "escapes inline markup" do
+        expect(pdf.recipient).to eq(["&lt;link href='http://evil'&gt;Acme&lt;/link&gt; &amp; Co"])
+      end
+    end
+
+    context "with markup in a custom recipient" do
+      before { ActiveBilling.configuration.invoice_recipient = ->(_inv) { ["<b>Custom</b>"] } }
+
+      it "escapes inline markup" do
+        expect(pdf.recipient).to eq(["&lt;b&gt;Custom&lt;/b&gt;"])
+      end
+    end
   end
 
   describe "#line_items" do
@@ -70,9 +86,43 @@ RSpec.describe ActiveBilling::InvoicePdf do
       end
     end
 
+    context "with markup in an item description" do
+      before do
+        create(:active_billing_invoice_item, invoice: invoice, key: "api_calls", description: "<b>Calls</b> & more",
+                                             quantity: 1, unit_price: 1.5)
+      end
+
+      it "escapes inline markup" do
+        expect(pdf.line_items[1].first).to eq("&lt;b&gt;Calls&lt;/b&gt; &amp; more")
+      end
+    end
+
     context "without items" do
       it "falls back to the invoice description" do
         expect(pdf.line_items[1]).to eq(["Test invoice", nil, nil, "BRL 15.00"])
+      end
+
+      context "with markup in the invoice description" do
+        let(:invoice) do
+          create(:active_billing_invoice, :issued, billing: billing, amount_in_cents: 1_500, description: "A <b>B</b>")
+        end
+
+        it "escapes inline markup" do
+          expect(pdf.line_items[1].first).to eq("A &lt;b&gt;B&lt;/b&gt;")
+        end
+      end
+    end
+
+    context "when the locale has no PDF labels" do
+      around do |example|
+        I18n.available_locales += [:"pt-BR"]
+        I18n.with_locale(:"pt-BR") { example.run }
+      ensure
+        I18n.available_locales -= [:"pt-BR"]
+      end
+
+      it "falls back to the English labels" do
+        expect(pdf.line_items.first).to eq(["<b>Item</b>", "<b>Unit price</b>", "<b>Quantity</b>", "<b>Amount</b>"])
       end
     end
   end

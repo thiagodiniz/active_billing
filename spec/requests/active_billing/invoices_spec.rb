@@ -33,11 +33,29 @@ RSpec.describe "ActiveBilling::Invoices", type: :request do
 
   describe "GET /active_billing/invoices/:id" do
     let(:invoice) { create(:active_billing_invoice, billing: billing) }
+    let(:other_invoice) do
+      create(:active_billing_invoice, billing: create(:active_billing_billing, billable_entity: create(:store)))
+    end
 
     it "responds successfully" do
       get "/active_billing/invoices/#{invoice.id}",
           params: { billable_entity_id: store.id, billable_entity_type: "Store" }
       expect(response).to have_http_status(:ok)
+    end
+
+    context "without a billable_entity_id" do
+      it "responds with bad request" do
+        get "/active_billing/invoices/#{invoice.id}"
+        expect(response).to have_http_status(:bad_request)
+      end
+    end
+
+    context "when the invoice belongs to another entity" do
+      it "responds with not found" do
+        get "/active_billing/invoices/#{other_invoice.id}",
+            params: { billable_entity_id: store.id, billable_entity_type: "Store" }
+        expect(response).to have_http_status(:not_found)
+      end
     end
 
     context "when requesting a PDF" do
@@ -55,6 +73,14 @@ RSpec.describe "ActiveBilling::Invoices", type: :request do
 
         expect(response.media_type).to eq("application/pdf")
         expect(response.body).to start_with("%PDF")
+      end
+
+      context "when the invoice belongs to another entity" do
+        it "responds with not found" do
+          get "/active_billing/invoices/#{other_invoice.id}.pdf",
+              params: { billable_entity_id: store.id, billable_entity_type: "Store" }
+          expect(response).to have_http_status(:not_found)
+        end
       end
     end
   end
