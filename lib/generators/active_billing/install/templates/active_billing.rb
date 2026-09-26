@@ -20,6 +20,11 @@ ActiveBilling.configure do |config|
   # base controller so the portal runs behind your authentication and layout.
   config.parent_controller = "ActionController::Base"
 
+  # Resolve the billable entity the portal is scoped to from the request (e.g. the
+  # signed-in user's organization). When set, the billable_entity_* query params
+  # are ignored so users cannot browse other entities' data.
+  # config.portal_billable_entity = ->(controller) { controller.current_user&.organization }
+
   # Issuer details printed on invoice PDFs (required for PDF rendering).
   # config.company = {
   #   name: "Example, LLC",

@@ -55,7 +55,9 @@ module ActiveBilling
     before_validation :set_description
 
     scope :for_billable_entity, ->(type, id) {
-      joins(:billing).where(active_billing_billings: { billable_entity_type: type, billable_entity_id: id })
+      left_joins(:billing)
+        .where(active_billing_billings: { billable_entity_type: type, billable_entity_id: id })
+        .or(left_joins(:billing).where(billing_id: nil, resource_type: type, resource_id: id))
     }
 
     def cancellable?

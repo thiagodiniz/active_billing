@@ -29,6 +29,10 @@ module ActiveBilling
     # api_authorizer  — callable `->(api_key, request) { scope }` invoked on every API
     #                   request. Return a truthy scope object to authorize (falsy → 401).
     #                   When nil, the API rejects every request with 403.
+    # portal_billable_entity — callable `->(controller) { entity }` that resolves the
+    #                   billable entity the portal is scoped to (e.g. from the signed-in
+    #                   user). When set, the billable_entity_* query params are ignored;
+    #                   a nil result renders the 400 missing-entity page.
     attr_accessor :currency,
                   :default_penalty,
                   :default_interest,
@@ -37,6 +41,7 @@ module ActiveBilling
                   :billable_entity_class,
                   :invoice_description,
                   :parent_controller,
+                  :portal_billable_entity,
                   :api_enabled,
                   :api_authorizer,
                   :company,
@@ -53,6 +58,7 @@ module ActiveBilling
       @billable_entity_class  = nil
       @invoice_description    = nil
       @parent_controller      = "ActionController::Base"
+      @portal_billable_entity = nil
       @api_enabled            = false
       @api_authorizer         = nil
       @company                = nil

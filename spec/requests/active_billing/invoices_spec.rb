@@ -82,6 +82,56 @@ RSpec.describe "ActiveBilling::Invoices", type: :request do
           expect(response).to have_http_status(:not_found)
         end
       end
+
+      context "without a billable_entity_id" do
+        it "responds with bad request" do
+          get "/active_billing/invoices/#{invoice.id}.pdf"
+          expect(response).to have_http_status(:bad_request)
+        end
+      end
+    end
+  end
+
+  describe "with config.portal_billable_entity" do
+    let(:other_store) { create(:store) }
+    let(:other_invoice) do
+      create(:active_billing_invoice, billing: create(:active_billing_billing, billable_entity: other_store))
+    end
+    let(:invoice) { create(:active_billing_invoice, billing: billing) }
+
+    around do |example|
+      original = ActiveBilling.configuration.dup
+      ActiveBilling.configuration.portal_billable_entity = ->(controller) { Store.find_by(id: controller.params[:me]) }
+      example.run
+    ensure
+      ActiveBilling.configuration = original
+    end
+
+    it "scopes the index to the resolved entity" do
+      invoice
+      other_invoice
+      get "/active_billing/invoices", params: { me: store.id }
+
+      expect(response.body).to include(invoice.uuid)
+      expect(response.body).not_to include(other_invoice.uuid)
+    end
+
+    it "ignores billable_entity_id from the query string" do
+      get "/active_billing/invoices/#{other_invoice.id}",
+          params: { me: store.id, billable_entity_id: other_store.id, billable_entity_type: "Store" }
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it "shows the resolved entity's invoice" do
+      get "/active_billing/invoices/#{invoice.id}", params: { me: store.id }
+      expect(response).to have_http_status(:ok)
+    end
+
+    context "when no entity is resolved" do
+      it "responds with bad request" do
+        get "/active_billing/invoices", params: { billable_entity_id: store.id, billable_entity_type: "Store" }
+        expect(response).to have_http_status(:bad_request)
+      end
     end
   end
 end

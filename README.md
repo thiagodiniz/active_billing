@@ -259,6 +259,12 @@ charge.mark_paid!(paid_at: Time.current)
 
 The engine ships a **read-only portal** that a host app gets for free once the engine is mounted. Every list is scoped to a billable entity via the `billable_entity_id` query param (and `billable_entity_type`, unless `config.billable_entity_class` is set). Authentication is intentionally out of scope — wrap the routes with your own app's auth, and set `config.parent_controller` so the portal controllers inherit it.
 
+The query params are convenient for admins but they are **not authorization**: anyone who can reach the portal can pass another entity's id. For end-user facing deployments set `config.portal_billable_entity` to derive the entity from the request instead; the query params are then ignored:
+
+```ruby
+config.portal_billable_entity = ->(controller) { controller.current_user&.organization }
+```
+
 Mounted at the engine's path (e.g. `/billing`):
 
 | Route | Action | Purpose |
@@ -276,7 +282,7 @@ Mounted at the engine's path (e.g. `/billing`):
 GET /billing/invoices?billable_entity_id=42&billable_entity_type=Store
 ```
 
-Index actions return **400 Bad Request** when `billable_entity_id` (or a resolvable type) is missing. All user-facing strings go through `I18n.t` with English defaults in `config/locales/active_billing.en.yml`.
+Index actions (and `GET /invoices/:id`) return **400 Bad Request** when `billable_entity_id` (or a resolvable type) is missing, and `GET /invoices/:id` returns **404** for an invoice that belongs to another entity. All user-facing strings go through `I18n.t` with English defaults in `config/locales/active_billing.en.yml`.
 
 > **Note:** the portal is read-only (`index`/`show`). Create/update/destroy and an admin UI are not part of this surface.
 
