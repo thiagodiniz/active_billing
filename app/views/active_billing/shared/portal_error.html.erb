@@ -1,2 +1,2 @@
-<h1 class="text-xl font-semibold text-white"><%= t("active_billing.errors.#{key}.title") %></h1>
-<p class="mt-2 text-gray-400"><%= t("active_billing.errors.#{key}.body") %></p>
+<h1 class="text-xl font-semibold text-white"><%= t("active_billing.errors.#{key}.title", default: t("active_billing.errors.#{key}.title", locale: :en)) %></h1>
+<p class="mt-2 text-gray-400"><%= t("active_billing.errors.#{key}.body", default: t("active_billing.errors.#{key}.body", locale: :en)) %></p>

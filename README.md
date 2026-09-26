@@ -272,12 +272,12 @@ Mounted at the engine's path (e.g. `/billing`):
 | `GET /invoices` | index | Invoices for the billable entity (via their Billing) |
 | `GET /invoices/:id` | show | One invoice + its items |
 | `GET /usages` | index | Usages measured for the billable entity |
-| `GET /usages/:id` | show | One usage |
+| `GET /usages/:id` | show | One usage (404 for another entity's) |
 | `GET /charges` | index | Charges for the billable entity (via invoice → billing) |
-| `GET /charges/:id` | show | One charge |
+| `GET /charges/:id` | show | One charge (404 for another entity's) |
 | `GET /plan` | show | The current plan for the billable entity (from its open Billing) |
 
-Every portal action returns **403 Forbidden** when `config.portal_billable_entity` is not set, **400 Bad Request** when it returns `nil` (e.g. nobody is signed in), and `GET /invoices/:id` returns **404** for an invoice that belongs to another entity. All user-facing strings go through `I18n.t` with English defaults in `config/locales/active_billing.en.yml`.
+Every portal action returns **403 Forbidden** when `config.portal_billable_entity` is not set, **400 Bad Request** when it returns `nil` (e.g. nobody is signed in), and the `show` actions return **404** for a record that belongs to another entity. All user-facing strings go through `I18n.t` with English defaults in `config/locales/active_billing.en.yml`.
 
 > **Note:** the portal is read-only (`index`/`show`). Create/update/destroy and an admin UI are not part of this surface.
 
