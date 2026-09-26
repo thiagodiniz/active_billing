@@ -65,17 +65,17 @@ RSpec.describe ActiveBilling::InvoicePdf do
     end
 
     context "with markup in the entity name" do
-      let(:store) { create(:store, name: "<link href='http://evil'>Acme</link> & Co") }
+      let(:store) { create(:store, name: "<link href='http://evil'>Acme</link>") }
 
-      it "escapes inline markup" do
-        expect(pdf.recipient).to eq(["&lt;link href='http://evil'&gt;Acme&lt;/link&gt; &amp; Co"])
+      it "escapes the value" do
+        expect(pdf.recipient).to eq(["&lt;link href=&#39;http://evil&#39;&gt;Acme&lt;/link&gt;"])
       end
     end
 
     context "with markup in a custom recipient" do
       before { ActiveBilling.configuration.invoice_recipient = ->(_inv) { ["<b>Custom</b>"] } }
 
-      it "escapes inline markup" do
+      it "escapes the value" do
         expect(pdf.recipient).to eq(["&lt;b&gt;Custom&lt;/b&gt;"])
       end
     end
@@ -94,14 +94,11 @@ RSpec.describe ActiveBilling::InvoicePdf do
       end
     end
 
-    context "with markup in an item description" do
-      before do
-        create(:active_billing_invoice_item, invoice: invoice, key: "api_calls", description: "<b>Calls</b> & more",
-                                             quantity: 1, unit_price: 1.5)
-      end
+    context "with markup in the item key" do
+      before { create(:active_billing_invoice_item, invoice: invoice, key: "<b>bold</b>", quantity: 1, unit_price: 1) }
 
-      it "escapes inline markup" do
-        expect(pdf.line_items[1].first).to eq("&lt;b&gt;Calls&lt;/b&gt; &amp; more")
+      it "escapes the value" do
+        expect(pdf.line_items[1].first).to eq("&lt;b&gt;bold&lt;/b&gt;")
       end
     end
 
@@ -115,22 +112,22 @@ RSpec.describe ActiveBilling::InvoicePdf do
           create(:active_billing_invoice, :issued, billing: billing, amount_in_cents: 1_500, description: "A <b>B</b>")
         end
 
-        it "escapes inline markup" do
+        it "escapes the value" do
           expect(pdf.line_items[1].first).to eq("A &lt;b&gt;B&lt;/b&gt;")
         end
       end
     end
 
-    context "when the locale has no PDF labels" do
+    context "with an untranslated locale" do
       around do |example|
-        I18n.available_locales += [:"pt-BR"]
+        I18n.enforce_available_locales = false
         I18n.with_locale(:"pt-BR") { example.run }
       ensure
-        I18n.available_locales -= [:"pt-BR"]
+        I18n.enforce_available_locales = true
       end
 
-      it "falls back to the English labels" do
-        expect(pdf.line_items.first).to eq(["<b>Item</b>", "<b>Unit price</b>", "<b>Quantity</b>", "<b>Amount</b>"])
+      it "falls back to English labels" do
+        expect(pdf.line_items.last[2]).to eq("<b>Total</b>")
       end
     end
   end

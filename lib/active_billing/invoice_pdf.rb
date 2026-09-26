@@ -9,6 +9,12 @@ module ActiveBilling
   class InvoicePdf
     RECIPIENT_ATTRIBUTES = %i[name address email tax_id].freeze
 
+    LABEL_DEFAULTS = {
+      number: "Invoice number", issued_at: "Issued on", not_issued: "Not issued yet", state: "Status",
+      period: "Billing period", nfe_number: "NF-e number", item: "Item", unit_price: "Unit price",
+      quantity: "Quantity", amount: "Amount", total: "Total", footer: "Thank you for your business."
+    }.freeze
+
     attr_reader :invoice
 
     def initialize(invoice)
@@ -35,13 +41,9 @@ module ActiveBilling
     end
 
     def details
-      [
-        [t("number"), invoice.uuid],
-        [t("issued_at"), issued_on],
-        [t("state"), state_label],
-        [t("period"), period],
-        [t("nfe_number"), invoice.nfe_number]
-      ].select { |_label, value| value.present? }.map { |label, value| [label, escape(value)] }
+      rows = { number: invoice.uuid, issued_at: issued_on, state: state_label, period: period,
+               nfe_number: invoice.nfe_number }
+      rows.filter_map { |key, value| [t(key), escape(value)] if value.present? }
     end
 
     def company
@@ -52,7 +54,7 @@ module ActiveBilling
     end
 
     def recipient
-      recipient_lines.filter_map { |line| escape(line) }
+      (custom_recipient || entity_recipient).filter_map { |value| escape(value) }
     end
 
     def line_items
@@ -60,7 +62,7 @@ module ActiveBilling
     end
 
     def footer
-      config.invoice_pdf_footer.presence || I18n.t("active_billing.invoice.pdf.footer", default: "")
+      config.invoice_pdf_footer.presence || t("footer")
     end
 
     private
@@ -85,10 +87,11 @@ module ActiveBilling
       [I18n.l(start), finish && I18n.l(finish)].compact.join(" - ")
     end
 
-    def recipient_lines
-      custom = config.invoice_recipient
-      return Array(custom.call(invoice)) if custom.respond_to?(:call)
+    def custom_recipient
+      Array(config.invoice_recipient.call(invoice)) if config.invoice_recipient.respond_to?(:call)
+    end
 
+    def entity_recipient
       entity = invoice.billing&.billable_entity || invoice.resource
       return [] if entity.nil?
 
@@ -105,9 +108,7 @@ module ActiveBilling
 
     def item_rows
       rows = invoice.items.map { |item| item_row(item) }
-      return rows if rows.any?
-
-      [[escape(invoice.description), nil, nil, format_cents(invoice.amount_in_cents)]]
+      rows.presence || [[escape(invoice.description), nil, nil, format_cents(invoice.amount_in_cents)]]
     end
 
     def item_row(item)
@@ -130,14 +131,13 @@ module ActiveBilling
       "<b>#{escape(text)}</b>"
     end
 
-    # Prawn parses inline markup (<b>, <link>, ...) in table cells.
-    def escape(text)
-      text&.to_s&.gsub("&", "&amp;")&.gsub("<", "&lt;")&.gsub(">", "&gt;")
+    # Receipts renders cells with Prawn inline_format, so free text must not be parsed as markup.
+    def escape(value)
+      ERB::Util.html_escape(value.to_s) unless value.nil?
     end
 
     def t(key)
-      I18n.t("active_billing.invoice.pdf.#{key}", default: nil) ||
-        I18n.t("active_billing.invoice.pdf.#{key}", locale: :en)
+      I18n.t("active_billing.invoice.pdf.#{key}", default: LABEL_DEFAULTS.fetch(key.to_sym))
     end
   end
 end
