@@ -11,7 +11,10 @@ en:
     errors:
       missing_billable_entity:
         title: "Billable entity required"
-        body: "This page requires a billable_entity_id (and billable_entity_type unless a default is configured)."
+        body: "No billable entity could be resolved for this request. Sign in or check config.portal_billable_entity."
+      portal_not_configured:
+        title: "Portal not configured"
+        body: "Set config.portal_billable_entity in the ActiveBilling initializer to resolve the billable entity for portal requests."
     api:
       errors:
         api_authorizer_not_configured: "No api_authorizer is configured"

@@ -20,6 +20,20 @@ module ActiveBilling
         create(:active_billing_invoice, billing: create(:active_billing_billing, billable_entity: other))
         expect(Invoice.for_billable_entity("Store", store.id)).to eq([mine])
       end
+
+      context "when the invoice has no billing" do
+        it "matches by resource" do
+          mine = create(:active_billing_invoice, billing: nil, resource: store)
+          create(:active_billing_invoice, billing: nil, resource: other)
+          expect(Invoice.for_billable_entity("Store", store.id)).to eq([mine])
+        end
+
+        it "ignores the resource when the billing belongs to another entity" do
+          create(:active_billing_invoice, resource: store,
+                                          billing: create(:active_billing_billing, billable_entity: other))
+          expect(Invoice.for_billable_entity("Store", store.id)).to be_empty
+        end
+      end
     end
 
     describe "Charge.for_billable_entity" do

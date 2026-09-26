@@ -24,6 +24,14 @@ RSpec.describe ActiveBilling::InvoicePdf do
       expect(pdf.render).to start_with("%PDF")
     end
 
+    context "with a company without email" do
+      let(:company) { { name: "Example, LLC" } }
+
+      it "returns a PDF document" do
+        expect(pdf.render).to start_with("%PDF")
+      end
+    end
+
     context "without company configured" do
       let(:company) { nil }
 
@@ -63,6 +71,14 @@ RSpec.describe ActiveBilling::InvoicePdf do
         expect(pdf.recipient).to eq(["&lt;link href=&#39;http://evil&#39;&gt;Acme&lt;/link&gt;"])
       end
     end
+
+    context "with markup in a custom recipient" do
+      before { ActiveBilling.configuration.invoice_recipient = ->(_inv) { ["<b>Custom</b>"] } }
+
+      it "escapes the value" do
+        expect(pdf.recipient).to eq(["&lt;b&gt;Custom&lt;/b&gt;"])
+      end
+    end
   end
 
   describe "#line_items" do
@@ -89,6 +105,16 @@ RSpec.describe ActiveBilling::InvoicePdf do
     context "without items" do
       it "falls back to the invoice description" do
         expect(pdf.line_items[1]).to eq(["Test invoice", nil, nil, "BRL 15.00"])
+      end
+
+      context "with markup in the invoice description" do
+        let(:invoice) do
+          create(:active_billing_invoice, :issued, billing: billing, amount_in_cents: 1_500, description: "A <b>B</b>")
+        end
+
+        it "escapes the value" do
+          expect(pdf.line_items[1].first).to eq("A &lt;b&gt;B&lt;/b&gt;")
+        end
       end
     end
 
