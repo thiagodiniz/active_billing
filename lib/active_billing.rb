@@ -31,8 +31,8 @@ module ActiveBilling
     #                   When nil, the API rejects every request with 403.
     # portal_billable_entity — callable `->(controller) { entity }` that resolves the
     #                   billable entity the portal is scoped to (e.g. from the signed-in
-    #                   user). When set, the billable_entity_* query params are ignored;
-    #                   a nil result renders the 400 missing-entity page.
+    #                   user). Required for the portal: when nil every portal request
+    #                   responds 403; a nil result responds 400.
     attr_accessor :currency,
                   :default_penalty,
                   :default_interest,

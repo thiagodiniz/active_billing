@@ -132,9 +132,7 @@ module ActiveBilling
 
     # Prawn parses inline markup (<b>, <link>, ...) in table cells.
     def escape(text)
-      return if text.nil?
-
-      text.to_s.gsub("&", "&amp;").gsub("<", "&lt;").gsub(">", "&gt;")
+      text&.to_s&.gsub("&", "&amp;")&.gsub("<", "&lt;")&.gsub(">", "&gt;")
     end
 
     def t(key)

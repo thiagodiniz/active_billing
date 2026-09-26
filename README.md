@@ -122,8 +122,7 @@ ActiveBilling.configure do |config|
   # Method called on resources to resolve the billable entity
   config.billing_entity_method = :billing_entity
 
-  # Default polymorphic type used by the portal web UI when the
-  # billable_entity_type query param is omitted (e.g. "Customer", "Store").
+  # Default polymorphic type of billable entities (e.g. "Customer", "Store").
   config.billable_entity_class = nil
 
   # Standalone mode: master switch for the mountable JSON API. While false, every
@@ -257,15 +256,14 @@ charge.mark_paid!(paid_at: Time.current)
 
 ## Web UI (portal)
 
-The engine ships a **read-only portal** that a host app gets for free once the engine is mounted. Every list is scoped to a billable entity via the `billable_entity_id` query param (and `billable_entity_type`, unless `config.billable_entity_class` is set). Authentication is intentionally out of scope — wrap the routes with your own app's auth, and set `config.parent_controller` so the portal controllers inherit it.
-
-The query params are convenient for admins but they are **not authorization**: anyone who can reach the portal can pass another entity's id. For end-user facing deployments set `config.portal_billable_entity` to derive the entity from the request instead; the query params are then ignored:
+The engine ships a **read-only portal** that a host app gets for free once the engine is mounted. Every page is scoped to the billable entity returned by `config.portal_billable_entity`, a callable that receives the controller; authentication itself is the host app's job — wrap the routes with your own auth and set `config.parent_controller` so the portal controllers inherit `current_user` and friends:
 
 ```ruby
+config.parent_controller = "ApplicationController"
 config.portal_billable_entity = ->(controller) { controller.current_user&.organization }
 ```
 
-Resolve the entity from state that every portal request carries (session, `current_user`, subdomain, a route segment of the mount point) — not from an ad-hoc query param, since portal links stop carrying entity params once the hook is set.
+The portal never reads the entity from the query string, so users cannot browse another entity's data. Resolve it from state every request carries (session, `current_user`, subdomain, a route segment of the mount point).
 
 Mounted at the engine's path (e.g. `/billing`):
 
@@ -279,12 +277,7 @@ Mounted at the engine's path (e.g. `/billing`):
 | `GET /charges/:id` | show | One charge |
 | `GET /plan` | show | The current plan for the billable entity (from its open Billing) |
 
-```
-# Invoices for store #42, rendered by the engine's own views:
-GET /billing/invoices?billable_entity_id=42&billable_entity_type=Store
-```
-
-Index actions (and `GET /invoices/:id`) return **400 Bad Request** when `billable_entity_id` (or a resolvable type) is missing, and `GET /invoices/:id` returns **404** for an invoice that belongs to another entity. All user-facing strings go through `I18n.t` with English defaults in `config/locales/active_billing.en.yml`.
+Every portal action returns **403 Forbidden** when `config.portal_billable_entity` is not set, **400 Bad Request** when it returns `nil` (e.g. nobody is signed in), and `GET /invoices/:id` returns **404** for an invoice that belongs to another entity. All user-facing strings go through `I18n.t` with English defaults in `config/locales/active_billing.en.yml`.
 
 > **Note:** the portal is read-only (`index`/`show`). Create/update/destroy and an admin UI are not part of this surface.
 

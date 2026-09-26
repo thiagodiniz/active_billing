@@ -27,8 +27,8 @@
         </span>
       </div>
       <div class="flex items-center gap-x-4 sm:gap-x-6">
-        <%= link_to t("active_billing.invoice.download_pdf", default: "Download PDF"), invoice_path(@invoice, current_scope_params.merge(format: :pdf)), class: "rounded-md bg-indigo-500 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-400" %>
-        <%= link_to t("active_billing.back", default: "Back"), invoices_path(current_scope_params), class: "text-sm/6 font-semibold text-gray-300 hover:text-white" %>
+        <%= link_to t("active_billing.invoice.download_pdf", default: "Download PDF"), invoice_path(@invoice, format: :pdf), class: "rounded-md bg-indigo-500 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-400" %>
+        <%= link_to t("active_billing.back", default: "Back"), invoices_path, class: "text-sm/6 font-semibold text-gray-300 hover:text-white" %>
       </div>
     </div>
   </div>
@@ -131,6 +131,6 @@
   </div>
 
   <div class="lg:col-start-3">
-    <%= link_to "← #{t("active_billing.back", default: "Back to invoices")}", invoices_path(current_scope_params), class: "text-sm/6 font-semibold text-indigo-400 hover:text-indigo-300" %>
+    <%= link_to "← #{t("active_billing.back", default: "Back to invoices")}", invoices_path, class: "text-sm/6 font-semibold text-indigo-400 hover:text-indigo-300" %>
   </div>
 </div>
