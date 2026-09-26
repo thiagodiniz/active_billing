@@ -265,6 +265,8 @@ The query params are convenient for admins but they are **not authorization**: a
 config.portal_billable_entity = ->(controller) { controller.current_user&.organization }
 ```
 
+Resolve the entity from state that every portal request carries (session, `current_user`, subdomain, a route segment of the mount point) — not from an ad-hoc query param, since portal links stop carrying entity params once the hook is set.
+
 Mounted at the engine's path (e.g. `/billing`):
 
 | Route | Action | Purpose |

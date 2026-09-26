@@ -11,7 +11,7 @@
 </head>
 <body class="h-full">
 
-<% has_scope = respond_to?(:current_scope_params) && current_scope_params[:billable_entity_id].present? %>
+<% has_scope = respond_to?(:billable_entity_id) && billable_entity_id.present? %>
 <% def nav_class(active) = "group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold #{active ? 'bg-white/5 text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}" %>
 
 <el-dialog>

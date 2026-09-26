@@ -116,6 +116,13 @@ RSpec.describe "ActiveBilling::Invoices", type: :request do
       expect(response.body).not_to include(other_invoice.uuid)
     end
 
+    it "renders the navigation without scope params" do
+      get "/active_billing/invoices", params: { me: store.id }
+
+      expect(response.body).to include(%(href="/active_billing/usages"))
+      expect(response.body).not_to include("billable_entity_id=")
+    end
+
     it "ignores billable_entity_id from the query string" do
       get "/active_billing/invoices/#{other_invoice.id}",
           params: { me: store.id, billable_entity_id: other_store.id, billable_entity_type: "Store" }
