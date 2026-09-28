@@ -22,7 +22,7 @@ RSpec.describe ActiveBilling::Providers::Abacatepay do
     build_stubbed(:active_billing_plan, uuid: plan_uuid, name: "Pro", price_in_cents: 2_990, interval: "monthly")
   end
   let(:plan_reference) do
-    build_stubbed(:active_billing_provider_reference, provider: "abacatepay", external_id: "prod_1", record: plan)
+    Providers::Reference.new(provider: "abacatepay", external_id: "prod_1", metadata: {})
   end
   let(:billing) { build_stubbed(:active_billing_billing, uuid: billing_uuid, plan: plan) }
   let(:invoice) do
@@ -201,8 +201,8 @@ RSpec.describe ActiveBilling::Providers::Abacatepay do
 
   describe "#update_subscription" do
     let(:reference) do
-      build_stubbed(:active_billing_provider_reference, provider: "abacatepay", external_id: "bill_1", record: billing,
-                                                        metadata: { "last_webhook" => last_webhook })
+      Providers::Reference.new(provider: "abacatepay", external_id: "bill_1",
+                               metadata: { "last_webhook" => last_webhook })
     end
     let(:last_webhook) do
       { "event" => "subscription.completed", "data" => { "subscription" => { "id" => "subs_1" } } }
@@ -227,8 +227,7 @@ RSpec.describe ActiveBilling::Providers::Abacatepay do
 
     context "when the subscription was never activated" do
       let(:reference) do
-        build_stubbed(:active_billing_provider_reference, provider: "abacatepay", external_id: "bill_1",
-                                                          record: billing)
+        Providers::Reference.new(provider: "abacatepay", external_id: "bill_1", metadata: {})
       end
 
       it "raises an error" do
@@ -241,8 +240,8 @@ RSpec.describe ActiveBilling::Providers::Abacatepay do
 
   describe "#cancel_subscription" do
     let(:reference) do
-      build_stubbed(:active_billing_provider_reference, provider: "abacatepay", external_id: "bill_1", record: billing,
-                                                        metadata: { "subscription_id" => "subs_1" })
+      Providers::Reference.new(provider: "abacatepay", external_id: "bill_1",
+                               metadata: { "subscription_id" => "subs_1" })
     end
     let!(:stub) do
       stub_request(:post, "#{base_url}/subscriptions/cancel")

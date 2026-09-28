@@ -393,7 +393,7 @@ config.provider :abacatepay,
 | `update_customer`                | **not supported** (no endpoint)                                                                                   |
 | `create_plan` / `archive_plan`   | `POST /products/create` (recurring product, `monthly → MONTHLY`, `yearly → ANNUALLY`) / `POST /products/delete`   |
 | `update_plan`                    | **not supported** — products are immutable; create a new `Plan`                                                   |
-| `create_subscription`            | `POST /subscriptions/create` — returns a hosted checkout (`Result#url`); the `ProviderReference` is keyed by the checkout id |
+| `create_subscription`            | `POST /subscriptions/create` — returns a hosted checkout (`Result#url`); the billing's `provider_id` is the checkout id |
 | `update_subscription`            | `POST /subscriptions/change-plan` to the billing's current plan                                                   |
 | `cancel_subscription`            | `POST /subscriptions/cancel` (`cancelPolicy: NOW`)                                                                |
 | `create_payment` / `fetch_payment` | transparent PIX charge: `POST /transparents/create` / `GET /transparents/check` (`brCode` / `brCodeBase64` end up in `Charge#metadata`) |
@@ -404,7 +404,7 @@ Payment statuses map as `PENDING → pending`, `UNDER_DISPUTE → processing`, `
 Caveats:
 
 - Hosted checkouts (`/checkouts/create`) require pre-registered products, so one-off invoices are charged through transparent PIX instead; there is no hosted `payment_url` — render the `brCode` from `charge.metadata`.
-- A subscription only exists at AbacatePay after the customer pays the checkout. `update_subscription` / `cancel_subscription` need the `subs_` id, which the adapter reads from the last `subscription.*` webhook stored in `ProviderReference#metadata` (or from `metadata["subscription_id"]`) and raises `Providers::Error` if none has arrived yet.
+- A subscription only exists at AbacatePay after the customer pays the checkout. `update_subscription` / `cancel_subscription` need the `subs_` id, which the adapter reads from the last `subscription.*` webhook stored in `provider_ids["abacatepay"]` (or from `metadata["subscription_id"]`) and raises `Providers::Error` if none has arrived yet.
 - Subscription changes/renewals are billed by AbacatePay; ActiveBilling does not issue charges for subscription cycles.
 
 **Webhooks:** register `POST <mount>/webhooks/abacatepay?webhookSecret=<ABACATEPAY_WEBHOOK_SECRET>` on the AbacatePay dashboard. The query parameter is compared against `webhook_secret`; when AbacatePay sends `X-Webhook-Signature`, the HMAC-SHA256 of the raw body is verified too (disable with `verify_signature: false`, or override the key with `signature_key:`). Events: `transparent.completed` / `checkout.completed → payment_paid`, `transparent.refunded` / `checkout.refunded → payment_cancelled`, `subscription.completed` / `subscription.trial_started → subscription_created`, `subscription.renewed` / `subscription.plan_changed` / `subscription.payment_failed → subscription_updated`, `subscription.cancelled → subscription_cancelled`; everything else is ignored.
