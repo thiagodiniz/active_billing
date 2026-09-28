@@ -4,7 +4,7 @@
   <dt><%= t("active_billing.charge.invoice", default: "Invoice") %></dt>
   <dd>
     <% if @charge.invoice %>
-      <%= link_to @charge.invoice.uuid, invoice_path(@charge.invoice, current_scope_params) %>
+      <%= link_to @charge.invoice.uuid, invoice_path(@charge.invoice) %>
     <% else %>
       —
     <% end %>
@@ -20,4 +20,4 @@
   <dd><%= @charge.created_at %></dd>
 </dl>
 
-<p><%= link_to t("active_billing.back", default: "Back"), charges_path(current_scope_params) %></p>
+<p><%= link_to t("active_billing.back", default: "Back"), charges_path %></p>

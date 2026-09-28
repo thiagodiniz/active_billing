@@ -43,12 +43,32 @@ module ActiveBilling
 
       context "with a subscription event" do
         let(:billing) { create(:active_billing_billing) }
-        let(:reference) { create(:active_billing_provider_reference, record: billing, external_id: "sub_1") }
-        let(:payload) { { type: "subscription_cancelled", id: reference.external_id }.to_json }
+        let(:payload) { { type: "subscription_cancelled", id: "sub_1" }.to_json }
 
-        it "records the status on the reference" do
+        before do
+          billing.update!(provider: "test", provider_id: "sub_1", provider_ids: { "test" => { "id" => "sub_1" } })
+        end
+
+        it "records the status on the billing" do
           processor.call(payload, headers)
-          expect(reference.reload.metadata["status"]).to eq("cancelled")
+          expect(billing.reload.provider_reference_for(:test).metadata["status"]).to eq("cancelled")
+        end
+
+        context "when the billing moved to another provider" do
+          before do
+            billing.update!(provider: "other", provider_id: "x",
+                            provider_ids: billing.provider_ids.merge("other" => { "id" => "x" }))
+          end
+
+          it "still finds it by the old id" do
+            processor.call(payload, headers)
+            expect(billing.reload.provider_ids.dig("test", "status")).to eq("cancelled")
+          end
+
+          it "keeps the current provider" do
+            processor.call(payload, headers)
+            expect(billing.reload.provider).to eq("other")
+          end
         end
       end
 

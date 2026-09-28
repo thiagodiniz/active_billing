@@ -67,16 +67,10 @@ FactoryBot.define do
   factory :active_billing_provider_account, class: "ActiveBilling::ProviderAccount" do
     association :billable_entity, factory: :store
     provider { "test" }
-    active { true }
 
     trait :synced do
-      sequence(:external_customer_id) { |n| "customer_#{n}" }
+      sequence(:provider_id) { |n| "customer_#{n}" }
+      provider_ids { { provider => { "id" => provider_id } } }
     end
-  end
-
-  factory :active_billing_provider_reference, class: "ActiveBilling::ProviderReference" do
-    association :record, factory: :active_billing_plan
-    provider { "test" }
-    sequence(:external_id) { |n| "plan_#{n}" }
   end
 end

@@ -4,6 +4,8 @@ module ActiveBilling
 
     FINISHED_STATES = %w[paid failed expired cancelled].freeze
 
+    include Discard::Model
+
     attribute :default_penalty, default: -> { ActiveBilling.configuration.default_penalty }
     attribute :default_interest, default: -> { ActiveBilling.configuration.default_interest }
 
@@ -23,21 +25,17 @@ module ActiveBilling
     }, default: "created"
 
     validates :state, presence: true
-    validates :external_id, uniqueness: { scope: :provider }, allow_nil: true
+    validates :provider_id, uniqueness: { scope: :provider }, allow_nil: true
 
     scope :for_billable_entity, ->(type, id) {
       joins(invoice: :billing).where(active_billing_billings: { billable_entity_type: type, billable_entity_id: id })
     }
-    scope :for_provider, ->(name) { where(provider: name.to_s) }
     scope :unfinished, -> { where.not(state: FINISHED_STATES) }
 
     sync_with_provider create: :create_payment
 
     alias payer resource
-
-    def self.lookup(provider, external_id)
-      for_provider(provider).find_by(external_id: external_id.to_s)
-    end
+    alias_attribute :external_id, :provider_id
 
     def billing_entity
       # Override this method in your application to return the entity that receives payments
@@ -71,23 +69,16 @@ module ActiveBilling
       FINISHED_STATES.include?(state)
     end
 
-    def synced?
-      external_id.present?
-    end
-
     def provider_account
       invoice&.provider_account || ProviderAccount.current_for(resource)
     end
 
     # Applies a `Providers::Result` returned by the adapter for this charge.
     def apply_provider_result!(provider_name, result)
-      without_provider_sync do
-        update!(provider: provider_name.to_s,
-                external_id: result.external_id,
-                payment_url: result.url || payment_url,
-                metadata: metadata.merge(result.raw.deep_stringify_keys),
-                **state_attributes_for(result.status))
-      end
+      store_provider_result!(provider_name, result,
+                             payment_url: result.url || payment_url,
+                             metadata: metadata.merge(result.raw.deep_stringify_keys),
+                             **state_attributes_for(result.status))
     end
 
     # Applies a `Providers::WebhookEvent` about this charge.

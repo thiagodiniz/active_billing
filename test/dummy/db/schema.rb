@@ -17,44 +17,53 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_24_211544) do
   enable_extension "pgcrypto"
 
   create_table "active_billing_billings", force: :cascade do |t|
-    t.bigint "billable_entity_id", null: false
+    t.uuid "uuid", default: -> { "gen_random_uuid()" }, null: false
     t.string "billable_entity_type", null: false
-    t.datetime "created_at", null: false
-    t.jsonb "metadata", default: {}, null: false
-    t.date "period_end"
-    t.date "period_start"
-    t.jsonb "plan_allowances", default: {}, null: false
+    t.bigint "billable_entity_id", null: false
     t.bigint "plan_id"
     t.string "plan_name"
     t.integer "plan_price_in_cents"
+    t.jsonb "plan_allowances", default: {}, null: false
     t.string "state", default: "open", null: false
+    t.date "period_start"
+    t.date "period_end"
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.uuid "uuid", default: -> { "gen_random_uuid()" }, null: false
+    t.datetime "discarded_at"
+    t.string "provider"
+    t.string "provider_id"
+    t.jsonb "provider_ids", default: {}, null: false
     t.index ["billable_entity_type", "billable_entity_id"], name: "index_active_billing_billings_on_billable_entity"
+    t.index ["discarded_at"], name: "index_active_billing_billings_on_discarded_at"
     t.index ["plan_id"], name: "index_active_billing_billings_on_plan_id"
+    t.index ["provider", "provider_id"], name: "index_active_billing_billings_on_provider_id"
     t.index ["state"], name: "index_active_billing_billings_on_state"
     t.index ["uuid"], name: "index_active_billing_billings_on_uuid", unique: true
   end
 
   create_table "active_billing_charges", force: :cascade do |t|
-    t.datetime "created_at", null: false
-    t.integer "default_interest"
-    t.integer "default_penalty"
-    t.bigint "invoice_id"
-    t.bigint "resource_id", null: false
-    t.string "resource_type", null: false
-    t.datetime "updated_at", null: false
     t.uuid "uuid", default: -> { "gen_random_uuid()" }, null: false
-    t.string "state", default: "created", null: false
+    t.string "resource_type", null: false
+    t.bigint "resource_id", null: false
+    t.bigint "invoice_id"
+    t.integer "default_penalty"
+    t.integer "default_interest"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.datetime "discarded_at"
     t.string "provider"
-    t.string "external_id"
+    t.string "provider_id"
+    t.jsonb "provider_ids", default: {}, null: false
+    t.string "state", default: "created", null: false
     t.string "payment_url"
     t.datetime "paid_at"
     t.datetime "failed_at"
     t.datetime "expired_at"
     t.jsonb "metadata", default: {}, null: false
+    t.index ["discarded_at"], name: "index_active_billing_charges_on_discarded_at"
     t.index ["invoice_id"], name: "index_active_billing_charges_on_invoice_id"
-    t.index ["provider", "external_id"], name: "index_active_billing_charges_on_provider_and_external_id", unique: true
+    t.index ["provider", "provider_id"], name: "index_active_billing_charges_on_provider_id"
     t.index ["resource_type", "resource_id"], name: "index_active_billing_charges_on_resource"
     t.index ["state"], name: "index_active_billing_charges_on_state"
     t.index ["uuid"], name: "index_active_billing_charges_on_uuid", unique: true
@@ -62,12 +71,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_24_211544) do
 
   create_table "active_billing_events", force: :cascade do |t|
     t.bigint "billing_usage_id", null: false
-    t.boolean "chargeable", default: true, null: false
-    t.datetime "created_at", null: false
+    t.string "resource_type"
+    t.bigint "resource_id"
     t.string "kind", null: false
     t.jsonb "metadata", default: {}, null: false
-    t.bigint "resource_id"
-    t.string "resource_type"
+    t.boolean "chargeable", default: true, null: false
+    t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["billing_usage_id"], name: "index_active_billing_events_on_billing_usage_id"
     t.index ["kind"], name: "index_active_billing_events_on_kind"
@@ -77,37 +86,39 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_24_211544) do
 
   create_table "active_billing_invoice_items", force: :cascade do |t|
     t.bigint "billing_invoice_id", null: false
-    t.datetime "created_at", null: false
-    t.text "description"
+    t.bigint "usage_id"
     t.string "key", null: false
-    t.decimal "price", precision: 10, scale: 2
+    t.text "description"
     t.integer "quantity", null: false
     t.decimal "unit_price", precision: 10, scale: 2, null: false
+    t.decimal "price", precision: 10, scale: 2
+    t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.bigint "usage_id"
     t.index ["billing_invoice_id"], name: "index_active_billing_invoice_items_on_billing_invoice_id"
     t.index ["usage_id", "billing_invoice_id"], name: "index_items_on_usage_and_invoice"
     t.index ["usage_id"], name: "index_active_billing_invoice_items_on_usage_id"
   end
 
   create_table "active_billing_invoices", force: :cascade do |t|
-    t.integer "amount_in_cents"
-    t.bigint "billing_id"
-    t.datetime "created_at", null: false
-    t.text "description"
-    t.hstore "email_timestamps"
+    t.uuid "uuid", default: -> { "gen_random_uuid()" }, null: false
+    t.string "resource_type", null: false
+    t.bigint "resource_id", null: false
+    t.string "state", default: "created", null: false
     t.string "external_invoice_id"
     t.datetime "issued_at"
+    t.bigint "rps_number"
+    t.hstore "email_timestamps"
+    t.integer "amount_in_cents"
+    t.text "description"
+    t.string "payment_collected_medium", default: "missing"
     t.string "nfe_number"
     t.string "nfe_service_code"
-    t.string "payment_collected_medium", default: "missing"
-    t.bigint "resource_id", null: false
-    t.string "resource_type", null: false
-    t.bigint "rps_number"
-    t.string "state", default: "created", null: false
+    t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.uuid "uuid", default: -> { "gen_random_uuid()" }, null: false
+    t.bigint "billing_id"
+    t.datetime "discarded_at"
     t.index ["billing_id"], name: "index_active_billing_invoices_on_billing_id"
+    t.index ["discarded_at"], name: "index_active_billing_invoices_on_discarded_at"
     t.index ["external_invoice_id"], name: "index_active_billing_invoices_on_external_invoice_id", unique: true
     t.index ["resource_type", "resource_id"], name: "index_active_billing_invoices_on_resource"
     t.index ["state"], name: "index_active_billing_invoices_on_state"
@@ -115,16 +126,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_24_211544) do
   end
 
   create_table "active_billing_plans", force: :cascade do |t|
-    t.boolean "active", default: true, null: false
-    t.jsonb "allowances", default: {}, null: false
-    t.datetime "created_at", null: false
-    t.string "interval", default: "monthly", null: false
-    t.jsonb "metadata", default: {}, null: false
+    t.uuid "uuid", default: -> { "gen_random_uuid()" }, null: false
     t.string "name", null: false
     t.integer "price_in_cents", default: 0, null: false
+    t.string "interval", default: "monthly", null: false
+    t.jsonb "allowances", default: {}, null: false
+    t.boolean "active", default: true, null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.uuid "uuid", default: -> { "gen_random_uuid()" }, null: false
+    t.string "provider"
+    t.string "provider_id"
+    t.jsonb "provider_ids", default: {}, null: false
     t.index ["active"], name: "index_active_billing_plans_on_active"
+    t.index ["provider", "provider_id"], name: "index_active_billing_plans_on_provider_id"
     t.index ["uuid"], name: "index_active_billing_plans_on_uuid", unique: true
   end
 
@@ -133,51 +148,39 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_24_211544) do
     t.string "billable_entity_type", null: false
     t.bigint "billable_entity_id", null: false
     t.string "provider", null: false
-    t.string "external_customer_id"
-    t.boolean "active", default: true, null: false
+    t.string "provider_id"
+    t.jsonb "provider_ids", default: {}, null: false
     t.jsonb "metadata", default: {}, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["billable_entity_type", "billable_entity_id", "provider"], name: "index_active_billing_provider_accounts_on_entity", unique: true
-    t.index ["billable_entity_type", "billable_entity_id"], name: "index_active_billing_provider_accounts_on_billable_entity"
-    t.index ["provider", "external_customer_id"], name: "index_active_billing_provider_accounts_on_customer"
+    t.index ["billable_entity_type", "billable_entity_id"], name: "index_active_billing_provider_accounts_on_entity", unique: true
+    t.index ["provider", "provider_id"], name: "index_active_billing_provider_accounts_on_provider_id"
     t.index ["uuid"], name: "index_active_billing_provider_accounts_on_uuid", unique: true
   end
 
-  create_table "active_billing_provider_references", force: :cascade do |t|
-    t.string "record_type", null: false
-    t.bigint "record_id", null: false
-    t.string "provider", null: false
-    t.string "external_id", null: false
-    t.jsonb "metadata", default: {}, null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["provider", "external_id"], name: "index_active_billing_provider_references_on_external_id"
-    t.index ["record_type", "record_id", "provider"], name: "index_active_billing_provider_references_on_record_provider", unique: true
-    t.index ["record_type", "record_id"], name: "index_active_billing_provider_references_on_record"
-  end
-
   create_table "active_billing_usages", force: :cascade do |t|
-    t.bigint "billable_entity_id", null: false
     t.string "billable_entity_type", null: false
-    t.bigint "billing_id"
-    t.datetime "created_at", null: false
+    t.bigint "billable_entity_id", null: false
+    t.date "month", null: false
+    t.uuid "uuid", default: -> { "gen_random_uuid()" }, null: false
+    t.integer "total_cost_in_cents", default: 0
     t.hstore "email_timestamps"
     t.jsonb "metadata", default: {}, null: false
-    t.date "month", null: false
-    t.integer "total_cost_in_cents", default: 0
+    t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.uuid "uuid", default: -> { "gen_random_uuid()" }, null: false
+    t.bigint "billing_id"
+    t.datetime "closed_at"
     t.index ["billable_entity_type", "billable_entity_id", "month"], name: "index_active_billing_usages_on_entity_and_month", unique: true
     t.index ["billable_entity_type", "billable_entity_id"], name: "index_active_billing_usages_on_billable_entity"
     t.index ["billing_id"], name: "index_active_billing_usages_on_billing_id"
+    t.index ["closed_at"], name: "index_active_billing_usages_on_closed_at"
     t.index ["month"], name: "index_active_billing_usages_on_month"
     t.index ["uuid"], name: "index_active_billing_usages_on_uuid", unique: true
   end
 
   create_table "stores", force: :cascade do |t|
-    t.datetime "created_at", null: false
     t.string "name"
+    t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
   end
 
