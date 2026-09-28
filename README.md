@@ -388,7 +388,7 @@ Register `POST <mount>/webhooks/polar` in the Polar dashboard (Settings → Webh
 
 Caveats:
 
-- Polar has no server-side "create subscription" for paid products. `create_subscription` opens a Checkout Session for the plan's product (`ProviderReference#external_id` is the checkout id, `status: "pending"`) and the hosted `url` must be shown to the customer; the real subscription id arrives through `subscription.*` webhooks (kept in the reference's `metadata["last_webhook"]`); `update_subscription` / `cancel_subscription` resolve it from `metadata["subscription_id"]` or, failing that, from `GET /checkouts/:id`.
+- Polar has no server-side "create subscription" for paid products. `create_subscription` opens a Checkout Session for the plan's product (the billing's `provider_id` is the checkout id, `status: "pending"`) and the hosted `url` must be shown to the customer; the real subscription id arrives through `subscription.*` webhooks (kept in `provider_ids["polar"]["last_webhook"]`); `update_subscription` / `cancel_subscription` resolve it from `metadata["subscription_id"]` or, failing that, from `GET /checkouts/:id`.
 - `cancel_subscription` sets `cancel_at_period_end: true`; pass `revoke: true` in the provider settings to revoke immediately instead.
 - `create_payment` opens a one-time Checkout Session. Without `payment_product_id` a one-time product is created per charge (its id is kept in `Charge#metadata["product_id"]`).
 - `cancel_payment` raises `Providers::NotSupported`: Polar checkouts cannot be cancelled through the API, they expire on their own (`checkout.expired` → `expired`).

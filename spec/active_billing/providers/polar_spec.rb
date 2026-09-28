@@ -16,7 +16,7 @@ module ActiveBilling
     end
     let(:plan) { create(:active_billing_plan, name: "Pro", price_in_cents: 4_990, interval: "yearly") }
     let(:plan_reference) do
-      create(:active_billing_provider_reference, record: plan, provider: "polar", external_id: "prod_1")
+      provider_reference(plan, "polar", "prod_1")
     end
     let(:billing) { create(:active_billing_billing, billable_entity: store, plan: plan) }
     let(:checkout_response) do
@@ -184,8 +184,7 @@ module ActiveBilling
 
     describe "#update_subscription" do
       let(:reference) do
-        create(:active_billing_provider_reference, record: billing, provider: "polar", external_id: "chk_1",
-                                                   metadata: { "subscription_id" => "sub_1" })
+        provider_reference(billing, "polar", "chk_1", { "subscription_id" => "sub_1" })
       end
       let!(:stub) do
         stub_polar(:patch, "/subscriptions/sub_1", body: { id: "sub_1", status: "active", product_id: "prod_1" },
@@ -205,7 +204,7 @@ module ActiveBilling
 
       context "when the checkout has not been completed" do
         let(:reference) do
-          create(:active_billing_provider_reference, record: billing, provider: "polar", external_id: "chk_1")
+          provider_reference(billing, "polar", "chk_1")
         end
         let!(:checkout_stub) { stub_polar(:get, "/checkouts/chk_1", body: checkout_response) }
 
@@ -220,7 +219,7 @@ module ActiveBilling
 
     describe "#cancel_subscription" do
       let(:reference) do
-        create(:active_billing_provider_reference, record: billing, provider: "polar", external_id: "chk_1")
+        provider_reference(billing, "polar", "chk_1")
       end
       let!(:checkout_stub) do
         stub_polar(:get, "/checkouts/chk_1", body: checkout_response.merge(subscription_id: "sub_1"))
