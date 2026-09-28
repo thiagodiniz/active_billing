@@ -48,7 +48,7 @@ module ActiveBilling
       end
 
       # --- Catalog -----------------------------------------------------------
-      # `reference` is the ProviderReference previously stored for the plan on
+      # `reference` is the `Providers::Reference` previously stored for the plan on
       # this provider.
 
       def create_plan(plan)
@@ -65,7 +65,7 @@ module ActiveBilling
 
       # --- Subscriptions -----------------------------------------------------
       # `billing` is the local Billing; `account` its payer's ProviderAccount and
-      # `plan_reference` the ProviderReference of the billing's plan on this provider.
+      # `plan_reference` the `Providers::Reference` of the billing's plan on this provider.
 
       def create_subscription(billing, account, plan_reference)
         not_supported!(__method__)

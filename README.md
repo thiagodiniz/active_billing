@@ -358,11 +358,11 @@ Resolution order: active `ProviderAccount` → `config.provider_resolver` → `c
 | `Invoice#issue!`  | creates a `Charge`, which creates a payment (`payment_url` for hosted pages)  |
 | `Charge`          | `refresh_from_provider!` pulls the current payment status                     |
 
-Remote identifiers are kept in `ActiveBilling::ProviderReference` (`plan.provider_reference_for(:stripe)`); per-record sync can be skipped with `record.without_provider_sync { ... }`.
+Every synced record (`Plan`, `Billing`, `Charge`, `ProviderAccount`) carries `provider` (current provider), `provider_id` (its id on that provider) and `provider_ids` (jsonb, `{ "stripe" => { "id" => "prod_1", ... } }` for every provider it has been on, so a record moved between providers keeps its history). Read one entry with `plan.provider_reference_for(:stripe)`; per-record sync can be skipped with `record.without_provider_sync { ... }`.
 
 ### Webhooks
 
-Mount the engine and point each provider at `POST <mount>/webhooks/:provider` (e.g. `/billing/webhooks/stripe`). Signatures are verified with the provider's `webhook_secret`; payment events update the matching `Charge` (`paid_at`, `failed_at`, …) and subscription events update the `ProviderReference` status.
+Mount the engine and point each provider at `POST <mount>/webhooks/:provider` (e.g. `/billing/webhooks/stripe`). Signatures are verified with the provider's `webhook_secret`; payment events update the matching `Charge` (`paid_at`, `failed_at`, …) and subscription events update the `Billing`'s `provider_ids` status.
 
 ### Writing an adapter
 

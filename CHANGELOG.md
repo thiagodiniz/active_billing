@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Payment provider interface (`ActiveBilling::Providers::Base`), registry (`ActiveBilling::Providers`), normalized `Result` / `WebhookEvent` values and an in-memory `:test` adapter. Concrete `:stripe`, `:polar` and `:abacatepay` adapters implement the same contract.
 - `config.provider(name, **settings)`, `default_provider`, `provider_resolver`, `provider_sync_enabled` and `provider_sync_async` configuration.
-- `ProviderAccount` (per-billable-entity provider + remote customer id) and `ProviderReference` (remote ids for plans, subscriptions, …). Each account can live on a different provider.
+- `ProviderAccount` (per-billable-entity current provider + remote customer id). Each account can live on a different provider.
+- `provider`/`provider_id`/`provider_ids` columns on plans, billings, charges and provider accounts: the current provider, its id, and a jsonb history of ids on every provider.
 - `Concerns::ProviderSyncable` + `Providers::Synchronizer` / `ProviderSyncJob`: plans, subscriptions (`Billing`), customers and charges are mirrored to the provider when created or changed.
 - `Charge` state machine (`created → pending → processing → paid / failed / expired / cancelled`) with `provider`, `external_id`, `payment_url`, `paid_at` / `failed_at` / `expired_at`. Issuing an `Invoice` now creates and submits a `Charge` when the payer has a provider.
 - `POST /webhooks/:provider` endpoint (`Providers::WebhookProcessor`) verifying signatures and applying payment / subscription events.
