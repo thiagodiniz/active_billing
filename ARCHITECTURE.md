@@ -2,7 +2,7 @@
 
 This document describes the architecture and design decisions behind ActiveBilling.
 
-> **Implementation status.** This document describes the target architecture. Implemented today: the domain models (`Plan`, `Billing`, `Usage`, `Event`, `Invoice`, `InvoiceItem`, `Charge`), the polymorphic billable-entity design, `for_billable_entity` scoping, and the read-only **portal web UI** with override generators. **Planned** (marked inline): the Billing lifecycle helpers (`close!`/`finalize!`), `BillingLineItem`, the full `Charge` state machine, and the standalone **JSON API**.
+> **Implementation status.** This document describes the target architecture. Implemented today: the domain models (`Plan`, `Billing`, `Usage`, `Event`, `Invoice`, `InvoiceItem`, `Charge`), the polymorphic billable-entity design, `for_billable_entity` scoping, the read-only **portal web UI**, the guarded lifecycle transitions (`Usage#close!`, `Billing#finalize!`, `Invoice#issue!`/`#cancel!`), and the standalone **JSON API** — all with override generators. **Planned** (marked inline): `BillingLineItem` adjustments and the full `Charge` state machine.
 
 ## Overview
 
@@ -172,28 +172,28 @@ Authentication is deliberately left to the host app. An authenticated admin UI i
 
 The host Rails app `require`s the gem and calls `ActiveBilling::Billing.create!`, `ActiveBilling::Billing.current_for(entity)`, etc. directly, and may mount the engine for the read-only portal. (Lifecycle helpers like `billing.close!` are **planned**.)
 
-### Standalone mode — planned
+### Standalone mode
 
-The intended design ships:
+The standalone surface ships:
 
-- a Rails engine (`ActiveBilling::Engine`) mountable at any path — **implemented** (currently serves the portal)
-- versioned JSON controllers under `ActiveBilling::Api::V1::*` — **planned**
-- a token auth contract (`config.api_authorizer` resolves the request to an authorized caller) — config key exists; enforcement **planned**
-- serializers for the public surface (Plan, Billing, Invoice, Charge) — **planned**
+- a Rails engine (`ActiveBilling::Engine`) mountable at any path — **implemented**
+- versioned JSON controllers under `ActiveBilling::Api::V1::*` with jbuilder serializers for every model — **implemented**
+- a token auth contract: `config.api_authorizer` (`->(api_key, request) { scope }`) resolves the `X-Api-Key` header to an authorized caller — **implemented** (`nil` hook → 403, falsy return → 401)
+- full CRUD guarded by the domain rules, with lifecycle transitions as REST noun sub-resources — **implemented**
 - webhooks for "cycle closed", "invoice issued", "charge paid" — **planned**
 
-The standalone API is intended as a thin transport layer over the embedded model API — every endpoint maps to a method call on a domain model.
+The standalone API is a thin transport layer over the embedded model API — every endpoint maps to a method call on a domain model, so both modes exercise identical business logic and validations.
 
 ### Configuration
 
 ```ruby
 ActiveBilling.configure do |config|
   config.api_enabled    = true
-  config.api_authorizer = ->(request) { ApiToken.find_by(token: request.headers["X-Api-Key"]) }
+  config.api_authorizer = ->(api_key, _request) { ApiToken.find_by(token: api_key) }
 end
 ```
 
-When `api_enabled` is false (embedded mode default), the engine's API controllers refuse all requests.
+When `api_enabled` is false (embedded mode default), every API route responds `404`.
 
 ## Data flow
 

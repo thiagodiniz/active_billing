@@ -18,6 +18,7 @@ module ActiveBilling
 
     validates :kind, presence: true
     validate :correct_resource_class
+    validate :usage_not_closed, on: :create
 
     before_create :set_chargeable
 
@@ -40,6 +41,12 @@ module ActiveBilling
       # Override this method in your application to validate resource types
       # based on event kind
       true
+    end
+
+    def usage_not_closed
+      return unless usage&.closed?
+
+      errors.add(:usage, :closed, message: "is closed and cannot receive new events")
     end
   end
 end

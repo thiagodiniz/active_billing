@@ -30,10 +30,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_24_211544) do
     t.jsonb "metadata", default: {}, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.datetime "discarded_at"
     t.string "provider"
     t.string "provider_id"
     t.jsonb "provider_ids", default: {}, null: false
     t.index ["billable_entity_type", "billable_entity_id"], name: "index_active_billing_billings_on_billable_entity"
+    t.index ["discarded_at"], name: "index_active_billing_billings_on_discarded_at"
     t.index ["plan_id"], name: "index_active_billing_billings_on_plan_id"
     t.index ["provider", "provider_id"], name: "index_active_billing_billings_on_provider_id"
     t.index ["state"], name: "index_active_billing_billings_on_state"
@@ -49,6 +51,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_24_211544) do
     t.integer "default_interest"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.datetime "discarded_at"
     t.string "provider"
     t.string "provider_id"
     t.jsonb "provider_ids", default: {}, null: false
@@ -58,6 +61,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_24_211544) do
     t.datetime "failed_at"
     t.datetime "expired_at"
     t.jsonb "metadata", default: {}, null: false
+    t.index ["discarded_at"], name: "index_active_billing_charges_on_discarded_at"
     t.index ["invoice_id"], name: "index_active_billing_charges_on_invoice_id"
     t.index ["provider", "provider_id"], name: "index_active_billing_charges_on_provider_id"
     t.index ["resource_type", "resource_id"], name: "index_active_billing_charges_on_resource"
@@ -112,7 +116,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_24_211544) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "billing_id"
+    t.datetime "discarded_at"
     t.index ["billing_id"], name: "index_active_billing_invoices_on_billing_id"
+    t.index ["discarded_at"], name: "index_active_billing_invoices_on_discarded_at"
     t.index ["external_invoice_id"], name: "index_active_billing_invoices_on_external_invoice_id", unique: true
     t.index ["resource_type", "resource_id"], name: "index_active_billing_invoices_on_resource"
     t.index ["state"], name: "index_active_billing_invoices_on_state"
@@ -163,9 +169,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_24_211544) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "billing_id"
+    t.datetime "closed_at"
     t.index ["billable_entity_type", "billable_entity_id", "month"], name: "index_active_billing_usages_on_entity_and_month", unique: true
     t.index ["billable_entity_type", "billable_entity_id"], name: "index_active_billing_usages_on_billable_entity"
     t.index ["billing_id"], name: "index_active_billing_usages_on_billing_id"
+    t.index ["closed_at"], name: "index_active_billing_usages_on_closed_at"
     t.index ["month"], name: "index_active_billing_usages_on_month"
     t.index ["uuid"], name: "index_active_billing_usages_on_uuid", unique: true
   end

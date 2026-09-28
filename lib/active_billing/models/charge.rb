@@ -4,6 +4,8 @@ module ActiveBilling
 
     FINISHED_STATES = %w[paid failed expired cancelled].freeze
 
+    include Discard::Model
+
     attribute :default_penalty, default: -> { ActiveBilling.configuration.default_penalty }
     attribute :default_interest, default: -> { ActiveBilling.configuration.default_interest }
 
