@@ -5,7 +5,7 @@ module ActiveBilling
     #   Providers::WebhookProcessor.new(:stripe).call(request.raw_post, request.headers.to_h)
     #
     # Payment events update the matching Charge; subscription events update the
-    # matching Billing's ProviderReference metadata. Unknown objects are ignored so
+    # matching Billing's `provider_ids` entry. Unknown objects are ignored so
     # providers can be pointed at the endpoint before any local record exists.
     class WebhookProcessor
       attr_reader :provider_name, :adapter
@@ -40,11 +40,13 @@ module ActiveBilling
       end
 
       def apply_subscription(event)
-        reference = ProviderReference.lookup(provider_name, event.external_id)
-        return if reference.nil?
+        billing = Billing.lookup(provider_name, event.external_id)
+        return if billing.nil?
 
-        reference.update!(metadata: reference.metadata.merge("status" => event.type.to_s.delete_prefix("subscription_"),
-                                                             "last_webhook" => event.raw.deep_stringify_keys))
+        result = Result.new(external_id: event.external_id,
+                            raw: { "status" => event.type.to_s.delete_prefix("subscription_"),
+                                   "last_webhook" => event.raw.deep_stringify_keys })
+        billing.store_provider_result!(provider_name, result, current: billing.provider == provider_name.to_s)
       end
     end
   end

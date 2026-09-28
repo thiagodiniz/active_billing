@@ -35,11 +35,7 @@ module ActiveBilling
         account = record
         return account if account.synced?
 
-        result = account.adapter.create_customer(account)
-        account.without_provider_sync do
-          account.update!(external_customer_id: result.external_id,
-                          metadata: account.metadata.merge(result.raw.deep_stringify_keys))
-        end
+        account.store_provider_result!(account.provider, account.adapter.create_customer(account))
         account
       end
 
@@ -60,8 +56,9 @@ module ActiveBilling
       alias update_plan create_plan
 
       def archive_plan
-        record.provider_references.map do |reference|
-          Providers.build(reference.provider).archive_plan(record, reference)
+        record.provider_ids.keys.filter_map do |name|
+          reference = record.provider_reference_for(name)
+          Providers.build(name).archive_plan(record, reference) if reference
           reference
         end
       end
@@ -76,7 +73,7 @@ module ActiveBilling
 
         plan_reference = sync_plan_on(account.provider, plan: record.plan)
         result = account.adapter.create_subscription(record, account, plan_reference)
-        ProviderReference.upsert_from(record, account.provider, result)
+        record.store_provider_result!(account.provider, result)
       end
 
       def sync_subscription
@@ -87,16 +84,14 @@ module ActiveBilling
         account, reference = subscription_reference
         return create_subscription if reference.nil?
 
-        result = account.adapter.update_subscription(record, reference)
-        ProviderReference.upsert_from(record, account.provider, result)
+        record.store_provider_result!(account.provider, account.adapter.update_subscription(record, reference))
       end
 
       def cancel_subscription
         account, reference = subscription_reference
         return if reference.nil?
 
-        result = account.adapter.cancel_subscription(record, reference)
-        ProviderReference.upsert_from(record, account.provider, result)
+        record.store_provider_result!(account.provider, account.adapter.cancel_subscription(record, reference))
       end
 
       # --- Payments ----------------------------------------------------------
@@ -144,7 +139,9 @@ module ActiveBilling
         adapter = Providers.build(provider)
         reference = plan.provider_reference_for(provider)
         result = reference ? adapter.update_plan(plan, reference) : adapter.create_plan(plan)
-        ProviderReference.upsert_from(plan, provider, result)
+        # A plan lives on every provider; the first one it reaches becomes "current".
+        plan.store_provider_result!(provider, result, current: plan.provider.blank? || plan.provider == provider.to_s)
+        plan.provider_reference_for(provider)
       end
     end
   end

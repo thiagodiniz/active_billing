@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Payment provider interface (`ActiveBilling::Providers::Base`), registry (`ActiveBilling::Providers`), normalized `Result` / `WebhookEvent` values and an in-memory `:test` adapter. Concrete `:stripe`, `:polar` and `:abacatepay` adapters implement the same contract.
 - `config.provider(name, **settings)`, `default_provider`, `provider_resolver`, `provider_sync_enabled` and `provider_sync_async` configuration.
-- `ProviderAccount` (per-billable-entity provider + remote customer id) and `ProviderReference` (remote ids for plans, subscriptions, …). Each account can live on a different provider.
+- `ProviderAccount` (per-billable-entity current provider + remote customer id). Each account can live on a different provider.
+- `provider`/`provider_id`/`provider_ids` columns on plans, billings, charges and provider accounts: the current provider, its id, and a jsonb history of ids on every provider.
 - `Concerns::ProviderSyncable` + `Providers::Synchronizer` / `ProviderSyncJob`: plans, subscriptions (`Billing`), customers and charges are mirrored to the provider when created or changed.
 - `Charge` state machine (`created → pending → processing → paid / failed / expired / cancelled`) with `provider`, `external_id`, `payment_url`, `paid_at` / `failed_at` / `expired_at`. Issuing an `Invoice` now creates and submits a `Charge` when the payer has a provider.
 - `POST /webhooks/:provider` endpoint (`Providers::WebhookProcessor`) verifying signatures and applying payment / subscription events.
@@ -45,6 +46,9 @@ This release reframes the gem around a **Billing** entity that owns one configur
 - `billing_id` added to `active_billing_usages` and `active_billing_invoices`, plus uniform `for_billable_entity(type, id)` scopes on `Usage`, `Invoice`, and `Charge`.
 - **Portal web UI** (read-only, scoped by `billable_entity_id`): `InvoicesController`, `UsagesController`, `ChargesController` (`index` + `show`) and `PlansController` (`show` — current plan). Ships ERB views + a layout the host app gets for free when the engine is mounted.
 - **Override generators**: `active_billing:views` and `active_billing:controllers` copy the shipped views/controllers into the host app; `active_billing:install` writes a configuration initializer and prints setup steps.
+- **Standalone JSON API** (`ActiveBilling::Api::V1`): versioned controllers + jbuilder serializers for every model, mounted under `/api/v1` and gated by `config.api_enabled`. Authenticates via `X-Api-Key` → `config.api_authorizer` (callable `->(api_key, request) { scope }`; `401` on reject, `403` when unset). Full CRUD guarded by the domain rules — soft delete for Billing/Invoice/Charge, plan deactivation vs. deletion, one-usage-per-cycle, empty-only usage deletion, append-only Events, and the Invoice state machine. Custom transitions are REST noun sub-resources: `PUT /billings/:id/plan`, `POST /billings/:id/finalization`, `POST /usages/:id/closure`, `POST /invoices/:id/issuance`, `POST /invoices/:id/cancellation`, `POST /charges/:id/payment`. Consistent `{ "error": { code, message, details } }` envelope.
+- **API override generators**: `active_billing:api_controller <resource>`, `active_billing:api_views <resource>`, and `active_billing:api_base` eject a single controller/view set into the host app.
+- **Guarded lifecycle transitions**: `Billing#finalize!` / `#associate_plan!`, `Usage#close!` (+ `closed_at` column, immutable once closed), `Invoice#issue!` / `#cancel!`. Soft delete (`Discard::Model` + `discarded_at`) on `Billing`, `Invoice`, and `Charge`.
 - `config.billable_entity_class` — default polymorphic type for portal pages when `billable_entity_type` is not passed as a query param.
 - `ActiveBilling.configuration` now lazily initializes (no need to call `configure` before reading defaults).
 - RSpec test harness: `.rspec`, `spec/spec_helper.rb`, `spec/rails_helper.rb`, FactoryBot factories, model/request/routing specs, and a dummy `Store` billable model.
@@ -60,9 +64,9 @@ This release reframes the gem around a **Billing** entity that owns one configur
 - `ActiveBilling::Charge` could not be created — it included `Chargeable`, which defines `has_one :charge` and scopes against columns the `charges` table does not have. `Charge` no longer includes `Chargeable`; its own associations and helpers (`payer`, `billing_entity`, …) are unchanged.
 
 ### Added (planned — not yet implemented)
-- `ActiveBilling::Billing` lifecycle helpers (`close!`, `finalize!`, `add_usage!`, `apply_credit!`, `apply_discount!`).
+- `ActiveBilling::Billing` adjustment helpers (`add_usage!`, `apply_credit!`, `apply_discount!`).
 - `ActiveBilling::BillingLineItem` — adjustments applied to a Billing between close and finalize.
-- Standalone **JSON API**: versioned controllers under `ActiveBilling::Api::V1::*`, serializers, and the `config.api_enabled` / `config.api_authorizer` HTTP surface (config keys exist; the controllers/serializers do not yet).
+- **Charge state machine** (`created → processing → paid / failed / expired`). Until it ships, the API's `POST /charges/:id/payment` responds `501`.
 
 ### Changed
 - The canonical lifecycle is now **configure Billing → record Events → close Usage → adjust Billing → finalize → Invoice → Charge.** Usage no longer flows directly into Invoice; it flows into Billing first. _(Design target; the `close!`/`finalize!` helpers are planned.)_

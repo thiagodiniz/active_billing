@@ -2,6 +2,8 @@ module ActiveBilling
   class Billing < ActiveRecord::Base
     include Concerns::ProviderSyncable
 
+    include Discard::Model
+
     enum :state, {
       open: "open",
       finalized: "finalized"
@@ -29,6 +31,18 @@ module ActiveBilling
 
     def provider_account
       ProviderAccount.current_for(billable_entity)
+    end
+
+    def associate_plan!(new_plan)
+      raise ActiveBilling::Error, "billing is not open" unless open?
+
+      update!(plan: new_plan)
+    end
+
+    def finalize!
+      raise ActiveBilling::Error, "billing is not open" unless open?
+
+      finalized!
     end
 
     private

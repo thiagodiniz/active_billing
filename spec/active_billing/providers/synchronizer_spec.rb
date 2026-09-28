@@ -24,7 +24,7 @@ module ActiveBilling
       end
 
       it "updates the remote customer when the account changes" do
-        account.update!(active: false)
+        account.update!(metadata: { "vat" => "1" })
         expect(calls.last).to eq(:update_customer)
       end
     end
@@ -33,7 +33,11 @@ module ActiveBilling
       subject(:plan) { create(:active_billing_plan) }
 
       it "mirrors the plan to every configured provider" do
-        expect(plan.provider_references.map(&:provider)).to eq(%w[test])
+        expect(plan.provider_ids.keys).to eq(%w[test])
+      end
+
+      it "makes the first provider the current one" do
+        expect(plan).to have_attributes(provider: "test", provider_id: plan.provider_ids.dig("test", "id"))
       end
 
       it "updates the remote plan when priced attributes change" do

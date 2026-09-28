@@ -1,5 +1,6 @@
 module ActiveBilling
   class Invoice < ActiveRecord::Base
+    include Discard::Model
     include Concerns::TimestampStoreAccessor
     include Concerns::NfeDescription
 
@@ -55,7 +56,9 @@ module ActiveBilling
     after_commit :create_charge_for_payment, if: :issued_now?
 
     scope :for_billable_entity, ->(type, id) {
-      joins(:billing).where(active_billing_billings: { billable_entity_type: type, billable_entity_id: id })
+      left_joins(:billing)
+        .where(active_billing_billings: { billable_entity_type: type, billable_entity_id: id })
+        .or(left_joins(:billing).where(billing_id: nil, resource_type: type, resource_id: id))
     }
 
     def cancellable?
@@ -65,6 +68,18 @@ module ActiveBilling
 
     def issuable?
       created? || failed?
+    end
+
+    def issue!
+      raise ActiveBilling::Error, "invoice cannot be issued" unless issuable?
+
+      issued!
+    end
+
+    def cancel!
+      raise ActiveBilling::Error, "invoice cannot be cancelled" unless cancellable?
+
+      cancelled!
     end
 
     def add_usages_ids
@@ -85,6 +100,10 @@ module ActiveBilling
 
     def provider_account
       ProviderAccount.current_for(billing&.billable_entity || resource)
+    end
+
+    def to_pdf
+      ActiveBilling::InvoicePdf.new(self).render
     end
 
     private
