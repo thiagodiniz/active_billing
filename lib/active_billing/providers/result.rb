@@ -20,3 +20,16 @@ module ActiveBilling
     end
   end
 end
+
+module ActiveBilling
+  module Providers
+    # A record's identity on one provider, read from its `provider_ids` column.
+    # `metadata` holds whatever the adapter returned alongside the id (e.g. Stripe's
+    # price id next to the product id).
+    Reference = Struct.new(:provider, :external_id, :metadata, keyword_init: true) do
+      def initialize(provider:, external_id:, metadata: {})
+        super(provider: provider.to_s, external_id: external_id.to_s, metadata: (metadata || {}).deep_stringify_keys)
+      end
+    end
+  end
+end

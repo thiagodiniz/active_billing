@@ -1,6 +1,12 @@
 module ActiveBilling
   module Concerns
-    # Mirrors a record to the payment provider(s) after it is committed.
+    # Mirrors a record to the payment provider(s) after it is committed and keeps
+    # the provider-side identifiers on the record itself:
+    #
+    #   provider     - provider currently in charge of the record
+    #   provider_id  - the record's id on that provider
+    #   provider_ids - { "stripe" => { "id" => "prod_1", ... }, "polar" => { ... } }
+    #                  ids and metadata on every provider the record has been on
     #
     #   sync_with_provider create: :create_plan, update: :update_plan, if: :saved_changes?
     #
@@ -13,9 +19,7 @@ module ActiveBilling
       included do
         attr_accessor :skip_provider_sync
 
-        has_many :provider_references, as: :record,
-                                       class_name: "ActiveBilling::ProviderReference",
-                                       dependent: :destroy
+        scope :for_provider, ->(name) { where(provider: name.to_s) }
       end
 
       class_methods do
@@ -30,14 +34,42 @@ module ActiveBilling
             enqueue_provider_sync(update) if condition.nil? || provider_sync_condition_met?(condition)
           end
         end
+
+        # Finds the record by its id on `provider`, whether that provider is the
+        # current one or a previous one.
+        def lookup(provider, external_id)
+          for_provider(provider).find_by(provider_id: external_id.to_s) ||
+            where("#{table_name}.provider_ids -> ? ->> 'id' = ?", provider.to_s, external_id.to_s).first
+        end
       end
 
-      def provider_reference_for(provider)
-        provider_references.find { |reference| reference.provider == provider.to_s }
+      def provider_reference
+        provider && provider_reference_for(provider)
       end
 
-      def synced_with?(provider)
-        provider_reference_for(provider).present?
+      def provider_reference_for(name)
+        data = provider_ids[name.to_s]
+        return if data.blank? || data["id"].blank?
+
+        Providers::Reference.new(provider: name.to_s, external_id: data["id"], metadata: data.except("id"))
+      end
+
+      def synced_with?(name)
+        provider_reference_for(name).present?
+      end
+
+      def synced?
+        provider_id.present?
+      end
+
+      # Persists a `Providers::Result` for `name`; `current: true` also makes that
+      # provider the record's current one.
+      def store_provider_result!(name, result, current: true, **attributes)
+        entry = (provider_ids[name.to_s] || {}).merge(result.raw.deep_stringify_keys, "id" => result.external_id)
+        attributes[:provider_ids] = provider_ids.merge(name.to_s => entry)
+        attributes.merge!(provider: name.to_s, provider_id: result.external_id) if current
+
+        without_provider_sync { update!(attributes) }
       end
 
       def without_provider_sync

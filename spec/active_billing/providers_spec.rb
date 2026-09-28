@@ -71,9 +71,7 @@ module ActiveBilling
         it { is_expected.to eq(:test) }
       end
 
-      context "with only an inactive provider account" do
-        before { create(:active_billing_provider_account, billable_entity: store, active: false) }
-
+      context "without a provider account" do
         it { is_expected.to be_nil }
       end
     end

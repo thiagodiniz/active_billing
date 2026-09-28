@@ -1,6 +1,9 @@
+require "discard"
+
 require "active_billing/version"
 require "active_billing/money"
 require "active_billing/engine"
+require "active_billing/invoice_pdf"
 
 require "active_billing/concerns/nfe_description"
 require "active_billing/concerns/timestamp_store_accessor"
@@ -22,6 +25,15 @@ module ActiveBilling
   end
 
   class Configuration
+    # api_enabled     — master switch for the standalone JSON API (mounted routes
+    #                   respond 404 while false).
+    # api_authorizer  — callable `->(api_key, request) { scope }` invoked on every API
+    #                   request. Return a truthy scope object to authorize (falsy → 401).
+    #                   When nil, the API rejects every request with 403.
+    # portal_billable_entity — callable `->(controller) { entity }` that resolves the
+    #                   billable entity the portal is scoped to (e.g. from the signed-in
+    #                   user). Required for the portal: when nil every portal request
+    #                   responds 403; a nil result responds 400.
     attr_accessor :currency,
                   :default_penalty,
                   :default_interest,
@@ -30,8 +42,13 @@ module ActiveBilling
                   :billable_entity_class,
                   :invoice_description,
                   :parent_controller,
+                  :portal_billable_entity,
                   :api_enabled,
                   :api_authorizer,
+                  :company,
+                  :invoice_recipient,
+                  :invoice_pdf_footer,
+                  :invoice_pdf_page_size,
                   :providers,
                   :default_provider,
                   :provider_resolver,
@@ -47,8 +64,13 @@ module ActiveBilling
       @billable_entity_class  = nil
       @invoice_description    = nil
       @parent_controller      = "ActionController::Base"
+      @portal_billable_entity = nil
       @api_enabled            = false
       @api_authorizer         = nil
+      @company                = nil
+      @invoice_recipient      = nil
+      @invoice_pdf_footer     = nil
+      @invoice_pdf_page_size  = "A4"
       @providers              = {}
       @default_provider       = nil
       @provider_resolver      = nil

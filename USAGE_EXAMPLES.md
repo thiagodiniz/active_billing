@@ -2,7 +2,7 @@
 
 Practical recipes for installing, configuring, and using ActiveBilling — both in embedded mode (host Rails app) and standalone mode (mounted billing service).
 
-> **Implementation status.** Recipes that rely on the Billing lifecycle helpers (`close!`, `finalize!`, adjustment methods) and the standalone JSON API document the **intended** behavior and are tagged **(planned)** at the section level — those methods/endpoints are not yet implemented. The **Portal web UI**, **override generators**, Plan/Billing models, and `for_billable_entity` scoping work today.
+> **Implementation status.** The **Portal web UI**, **override generators**, Plan/Billing models, `for_billable_entity` scoping, the guarded lifecycle transitions (`Usage#close!`, `Billing#finalize!`, `Invoice#issue!`/`#cancel!`), and the **standalone JSON API** all work today. Recipes that rely on Billing *adjustment* helpers (`apply_credit!`, `apply_discount!`, `add_usage!`) and the full **Charge state machine** document **intended** behavior and are tagged **(planned)** — those are not yet implemented.
 
 ## Table of Contents
 
@@ -35,9 +35,9 @@ ActiveBilling.configure do |config|
   # is not supplied as a query param.
   config.billable_entity_class  = "Customer"
 
-  # Standalone mode only (planned — API not yet implemented)
+  # Standalone JSON API (off by default). Authorizer: ->(api_key, request) { scope }.
   config.api_enabled    = false
-  config.api_authorizer = ->(req) { ApiToken.find_by(token: req.headers["X-Api-Key"]) }
+  config.api_authorizer = ->(api_key, _request) { ApiToken.find_by(token: api_key) }
 end
 ```
 
@@ -450,8 +450,6 @@ For example, after `active_billing:views` you can edit `app/views/active_billing
 
 ## Standalone Mode (JSON API)
 
-> **(Planned.)** The JSON API below is **not yet implemented**. Mounting the engine today gives you the read-only [Portal Web UI](#portal-web-ui); the versioned API controllers and serializers are on the roadmap.
-
 When the gem runs as a standalone billing service, external products interact over HTTP. Mount the engine and enable the API:
 
 ```ruby
@@ -463,52 +461,57 @@ end
 # config/initializers/active_billing.rb
 ActiveBilling.configure do |config|
   config.api_enabled    = true
-  config.api_authorizer = ->(request) {
-    ApiToken.find_by(token: request.headers["X-Api-Key"])
-  }
+  # ->(api_key, request) { scope }. Truthy scope authorizes; falsy → 401; nil hook → 403.
+  config.api_authorizer = ->(api_key, _request) { ApiToken.find_by(token: api_key) }
 end
 ```
 
-### Create a Billing
+Every request sends an `X-Api-Key` header. The API exposes full CRUD on every model,
+guarded by the domain rules (see the endpoint table in
+[README → Standalone usage](README.md#standalone-usage)).
+
+### Create a Plan and a Billing
+
+```http
+POST /billing/api/v1/plans
+X-Api-Key: <token>
+Content-Type: application/json
+
+{ "plan": { "name": "Pro", "price_in_cents": 9900, "interval": "monthly" } }
+```
 
 ```http
 POST /billing/api/v1/billings
 X-Api-Key: <token>
 Content-Type: application/json
 
-{
-  "billable_entity": { "type": "Customer", "id": "cus_123" },
-  "plan_id":     "plan_pro",
-  "cycle_start": "2026-05-01",
-  "cycle_end":   "2026-05-31",
-  "interval":    "monthly"
-}
+{ "billing": { "billable_entity_type": "Customer", "billable_entity_id": 123, "plan_id": 1 } }
 ```
 
-### Append an event
+### Record an event
 
 ```http
-POST /billing/api/v1/billings/:id/events
+POST /billing/api/v1/events
 X-Api-Key: <token>
 Content-Type: application/json
 
-{ "kind": "api_call", "metadata": { "endpoint": "/v1/users" }, "chargeable": true }
+{ "event": { "billing_usage_id": 7, "kind": "api_call", "resource_type": "Customer", "resource_id": 123 } }
 ```
 
-### Lifecycle commands
+### Lifecycle transitions (REST noun sub-resources)
 
 ```http
-POST /billing/api/v1/billings/:id/close
-POST /billing/api/v1/billings/:id/line_items   (adjustments)
-POST /billing/api/v1/billings/:id/credits
-POST /billing/api/v1/billings/:id/discounts
-POST /billing/api/v1/billings/:id/finalize
-GET  /billing/api/v1/invoices/:id
-POST /billing/api/v1/invoices/:id/issue
-POST /billing/api/v1/charges/:id/mark_paid
+POST /billing/api/v1/usages/:id/closure          # close the usage
+PUT  /billing/api/v1/billings/:id/plan            # associate a plan  { "plan_id": 2 }
+POST /billing/api/v1/billings/:id/finalization    # finalize the billing
+POST /billing/api/v1/invoices/:id/issuance        # issue the invoice
+POST /billing/api/v1/invoices/:id/cancellation    # cancel the invoice
+POST /billing/api/v1/charges/:id/payment          # 501 until the Charge state machine ships
 ```
 
-Every endpoint maps 1:1 to a model method in embedded mode. The standalone API is a thin HTTP surface — no parallel business logic.
+Illegal transitions return `409`; validation failures `422`, both using the
+`{ "error": { code, message, details } }` envelope. Every endpoint runs the same domain
+logic as embedded mode — the API is a thin HTTP surface, no parallel business rules.
 
 ## Testing
 
