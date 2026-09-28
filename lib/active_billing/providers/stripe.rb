@@ -10,7 +10,7 @@ module ActiveBilling
     # Plans map to a Product plus a recurring Price. Prices are immutable, so a
     # price change creates a new Price and archives the previous one; the current
     # price id travels in `Result#raw["price_id"]` and comes back through
-    # `ProviderReference#metadata`. Payments use hosted Checkout Sessions in
+    # `Providers::Reference#metadata`. Payments use hosted Checkout Sessions in
     # `payment` mode, whose `payment_status` drives the Charge state.
     #
     # Settings: `api_key` (required), `webhook_secret` (required for webhooks),

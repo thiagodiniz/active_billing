@@ -15,8 +15,7 @@ module ActiveBilling
     let(:account) { create(:active_billing_provider_account, :synced, provider: "test", billable_entity: store) }
     let(:plan) { create(:active_billing_plan, name: "Pro", price_in_cents: 2_500, interval: "yearly") }
     let(:plan_reference) do
-      create(:active_billing_provider_reference, record: plan, provider: "stripe", external_id: "prod_1",
-                                                 metadata: { "price_id" => "price_1" })
+      provider_reference(plan, "stripe", "prod_1", { "price_id" => "price_1" })
     end
     let(:charge) { create(:active_billing_charge, provider: "stripe", external_id: "cs_1", state: "pending") }
 
@@ -190,7 +189,7 @@ module ActiveBilling
     describe "#update_subscription" do
       let(:billing) { create(:active_billing_billing, plan: plan, billable_entity: store) }
       let(:reference) do
-        create(:active_billing_provider_reference, record: billing, provider: "stripe", external_id: "sub_1")
+        provider_reference(billing, "stripe", "sub_1")
       end
       let!(:fetch_request) do
         stub_stripe(:get, "/subscriptions/sub_1",
@@ -229,7 +228,7 @@ module ActiveBilling
     describe "#cancel_subscription" do
       let(:billing) { create(:active_billing_billing, plan: plan, billable_entity: store) }
       let(:reference) do
-        create(:active_billing_provider_reference, record: billing, provider: "stripe", external_id: "sub_1")
+        provider_reference(billing, "stripe", "sub_1")
       end
       let!(:request) { stub_stripe(:delete, "/subscriptions/sub_1", { id: "sub_1", status: "canceled" }) }
 

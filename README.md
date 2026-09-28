@@ -384,7 +384,7 @@ config.provider :stripe,
                 webhook_tolerance: 300                         # optional, seconds
 ```
 
-- Plans become a Product plus a recurring Price (`unit_amount`, `currency` from `config.currency`, `recurring[interval]` = `month`/`year`). Prices are immutable on Stripe, so changing a plan's price creates a new Price and archives the previous one; the current price id is kept in `ProviderReference#metadata["price_id"]`.
+- Plans become a Product plus a recurring Price (`unit_amount`, `currency` from `config.currency`, `recurring[interval]` = `month`/`year`). Prices are immutable on Stripe, so changing a plan's price creates a new Price and archives the previous one; the current price id is kept in `plan.provider_ids["stripe"]["price_id"]`.
 - Payments are hosted [Checkout Sessions](https://docs.stripe.com/api/checkout/sessions) in `payment` mode; `Charge#payment_url` is the session `url`. `cancel_payment` expires the session (only possible while it is `open`).
 - Register `POST <mount>/webhooks/stripe` as a webhook endpoint and subscribe to `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `checkout.session.expired` and `customer.subscription.*`. Signatures are verified from the `Stripe-Signature` header; other event types are ignored.
 
