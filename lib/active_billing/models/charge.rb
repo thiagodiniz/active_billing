@@ -28,7 +28,8 @@ module ActiveBilling
     validates :provider_id, uniqueness: { scope: :provider }, allow_nil: true
 
     scope :for_billable_entity, ->(type, id) {
-      joins(invoice: :billing).where(active_billing_billings: { billable_entity_type: type, billable_entity_id: id })
+      joins(invoice: :subscription)
+        .where(active_billing_subscriptions: { billable_entity_type: type, billable_entity_id: id })
     }
     scope :unfinished, -> { where.not(state: FINISHED_STATES) }
 

@@ -2,7 +2,7 @@
 
 Practical recipes for installing, configuring, and using ActiveBilling — both in embedded mode (host Rails app) and standalone mode (mounted billing service).
 
-> **Implementation status.** The **Portal web UI**, **override generators**, Plan/Billing models, `for_billable_entity` scoping, the guarded lifecycle transitions (`Usage#close!`, `Billing#finalize!`, `Invoice#issue!`/`#cancel!`), and the **standalone JSON API** all work today. Recipes that rely on Billing *adjustment* helpers (`apply_credit!`, `apply_discount!`, `add_usage!`) and the full **Charge state machine** document **intended** behavior and are tagged **(planned)** — those are not yet implemented.
+> **Implementation status.** The **Portal web UI**, **override generators**, Plan/Subscription models, `for_billable_entity` scoping, the guarded lifecycle transitions (`Usage#close!`, `Subscription#finalize!`, `Invoice#issue!`/`#cancel!`), and the **standalone JSON API** all work today. Recipes that rely on Subscription *adjustment* helpers (`apply_credit!`, `apply_discount!`, `add_usage!`) and the full **Charge state machine** document **intended** behavior and are tagged **(planned)** — those are not yet implemented.
 
 ## Table of Contents
 
@@ -45,9 +45,9 @@ end
 
 ```ruby
 class Customer < ApplicationRecord
-  has_many :billings,
+  has_many :subscriptions,
            as: :billable_entity,
-           class_name: "ActiveBilling::Billing",
+           class_name: "ActiveBilling::Subscription",
            dependent: :destroy
 
   has_many :usages,
@@ -102,26 +102,26 @@ end
 
 ## Billing Cycles
 
-### Open a Billing for a customer
+### Open a Subscription for a customer
 
 ```ruby
-billing = customer.billings.create!(
+subscription = customer.subscriptions.create!(
   plan:         ActiveBilling::Plan.find_by!(name: "Pro"),
   period_start: Date.current.beginning_of_month,
   period_end:   Date.current.end_of_month
 )
 
-ActiveBilling::Billing.current_for(customer)     # → the latest open Billing
+ActiveBilling::Subscription.current_for(customer)     # → the latest open Subscription
 ```
 
-While the Billing is `open`, assigning a `plan` snapshots it onto the record (`plan_name`, `plan_price_in_cents`, `plan_allowances`) on validation. A Billing can aggregate `Usage` records from multiple resources, so several stores can be unified into one Invoice/Charge or billed individually.
+While the Subscription is `open`, assigning a `plan` snapshots it onto the record (`plan_name`, `plan_price_in_cents`, `plan_allowances`) on validation. A Subscription can aggregate `Usage` records from multiple resources, so several stores can be unified into one Invoice/Charge or billed individually.
 
-> **Planned:** automatically opening a `Usage` when a Billing is created is not yet implemented — associate `Usage` records with a Billing directly (`usage.update!(billing: billing)`).
+> **Planned:** automatically opening a `Usage` when a Subscription is created is not yet implemented — associate `Usage` records with a Subscription directly (`usage.update!(subscription: subscription)`).
 
 ### Custom interval
 
 ```ruby
-customer.billings.create!(
+customer.subscriptions.create!(
   plan: plan,
   cycle_start: Date.current,
   cycle_end:   Date.current + 14.days,
@@ -134,7 +134,7 @@ customer.billings.create!(
 ### Single event
 
 ```ruby
-billing.usage.events.create!(
+subscription.usage.events.create!(
   kind: "api_call",
   resource: api_request,
   metadata: { endpoint: api_request.endpoint, response_time_ms: api_request.duration },
@@ -147,7 +147,7 @@ billing.usage.events.create!(
 ```ruby
 rows = api_requests.map do |req|
   {
-    billing_usage_id: billing.usage.id,
+    billing_usage_id: subscription.usage.id,
     kind: "api_call",
     metadata: { endpoint: req.endpoint },
     chargeable: true,
@@ -162,7 +162,7 @@ ActiveBilling::Event.insert_all(rows)
 ### Subscription tracking
 
 ```ruby
-billing.usage.events.create!(
+subscription.usage.events.create!(
   kind: "subscription_active",
   resource: subscription,
   metadata: { plan: subscription.plan_name, tier: subscription.tier }
@@ -176,11 +176,11 @@ billing.usage.events.create!(
 ### Close the cycle
 
 ```ruby
-billing.close!
+subscription.close!
 # - Usage transitions to "closed" (no more events)
 # - usage-derived line items are computed
 # - plan recurring charge is added from the snapshot
-# - Billing transitions to "closed" (still editable until finalized)
+# - Subscription transitions to "closed" (still editable until finalized)
 ```
 
 A scheduled job is the typical trigger:
@@ -191,7 +191,7 @@ class Billing::CloseDueCyclesJob < ApplicationJob
   queue_as :billing
 
   def perform
-    ActiveBilling::Billing.due_for_close.find_each(&:close!)
+    ActiveBilling::Subscription.due_for_close.find_each(&:close!)
   end
 end
 ```
@@ -199,7 +199,7 @@ end
 ### Add manual line items
 
 ```ruby
-billing.line_items.create!(
+subscription.line_items.create!(
   key: "setup_fee",
   description: "One-time onboarding",
   quantity: 1,
@@ -210,15 +210,15 @@ billing.line_items.create!(
 ### Apply credits and discounts
 
 ```ruby
-billing.apply_credit!(amount: 50.00, reason: "loyalty")
-billing.apply_discount!(percent: 10, reason: "promo-may-2026")
-billing.apply_discount!(amount: 25.00, reason: "manual goodwill")
+subscription.apply_credit!(amount: 50.00, reason: "loyalty")
+subscription.apply_discount!(percent: 10, reason: "promo-may-2026")
+subscription.apply_discount!(amount: 25.00, reason: "manual goodwill")
 ```
 
-### Combine multiple closed Usages into one Billing
+### Combine multiple closed Usages into one Subscription
 
 ```ruby
-parent_account.billings.create!(plan: plan, cycle_start: …, cycle_end: …).tap do |b|
+parent_account.subscriptions.create!(plan: plan, cycle_start: …, cycle_end: …).tap do |b|
   parent_account.sub_accounts.each do |child|
     child_usage = child.usages.for_month(b.cycle_start).first
     b.add_usage!(child_usage) if child_usage&.closed?
@@ -228,10 +228,10 @@ end
 
 ## Finalizing, Issuing, Charging
 
-> **(Planned.)** `Billing#finalize!` and the `Charge` state-transition helpers are **not yet implemented**. You can still build `Invoice`/`InvoiceItem`/`Charge` records directly and associate them with a `Billing`.
+> **(Planned.)** `Subscription#finalize!` and the `Charge` state-transition helpers are **not yet implemented**. You can still build `Invoice`/`InvoiceItem`/`Charge` records directly and associate them with a `Subscription`.
 
 ```ruby
-invoice = billing.finalize!     # creates Invoice + InvoiceItems; locks the Billing
+invoice = subscription.finalize!     # creates Invoice + InvoiceItems; locks the Subscription
 invoice.issue!                  # state → issued; creates Charge in "created"
 
 charge = invoice.charge
@@ -260,7 +260,7 @@ end
 ### Per-event pricing
 
 ```ruby
-class Billing < ActiveBilling::Billing
+class Subscription < ActiveBilling::Subscription
   def event_price_for(kind)
     case kind
     when "api_call" then 0.01
@@ -274,7 +274,7 @@ end
 ### Tiered (volume) pricing
 
 ```ruby
-class Billing < ActiveBilling::Billing
+class Subscription < ActiveBilling::Subscription
   def event_price_for(kind)
     return super unless kind == "api_call"
 
@@ -290,7 +290,7 @@ end
 ### Plan with included allowances (free tier)
 
 ```ruby
-class Billing < ActiveBilling::Billing
+class Subscription < ActiveBilling::Subscription
   def to_invoice_items_attributes
     api_calls   = usage.events.api_call.chargeable.count
     free_calls  = plan_allowances.fetch("api_call", 0)
@@ -313,7 +313,7 @@ end
 ### Minimum monthly charge
 
 ```ruby
-class Billing < ActiveBilling::Billing
+class Subscription < ActiveBilling::Subscription
   MINIMUM_MONTHLY = 50.00
 
   def calculate_total
@@ -327,7 +327,7 @@ end
 ### Proration for mid-cycle plan changes
 
 ```ruby
-class Billing < ActiveBilling::Billing
+class Subscription < ActiveBilling::Subscription
   def prorated_plan_amount(days_active)
     days_in_cycle = (cycle_end - cycle_start).to_i + 1
     (plan_amount / days_in_cycle) * days_active
@@ -341,12 +341,12 @@ end
 # app/models/credit.rb
 class Credit < ApplicationRecord
   belongs_to :customer
-  belongs_to :billing, class_name: "ActiveBilling::Billing", optional: true
+  belongs_to :subscription, class_name: "ActiveBilling::Subscription", optional: true
 
   scope :available, -> { where(consumed_at: nil) }
 end
 
-class Billing < ActiveBilling::Billing
+class Subscription < ActiveBilling::Subscription
   before_finalize :apply_available_credits
 
   private
@@ -354,7 +354,7 @@ class Billing < ActiveBilling::Billing
   def apply_available_credits
     billable_entity.credits.available.find_each do |credit|
       apply_credit!(amount: credit.amount, reason: "credit_##{credit.id}")
-      credit.update!(consumed_at: Time.current, billing: self)
+      credit.update!(consumed_at: Time.current, subscription: self)
     end
   end
 end
@@ -367,7 +367,7 @@ class Customer < ApplicationRecord
   enum :currency, { brl: "BRL", usd: "USD", eur: "EUR" }
 end
 
-class Billing < ActiveBilling::Billing
+class Subscription < ActiveBilling::Subscription
   before_validation :inherit_currency_from_entity
 
   private
@@ -389,14 +389,14 @@ module Billing
     end
 
     def call
-      billings = @customer.billings.where(cycle_start: @range).includes(usage: :events, invoice: :items)
+      subscriptions = @customer.subscriptions.where(cycle_start: @range).includes(usage: :events, invoice: :items)
 
       {
         customer: @customer.billing_legal_name,
         range: @range,
-        total_events:  billings.sum { |b| b.usage&.events&.count.to_i },
-        total_billed:  billings.sum { |b| b.invoice&.amount.to_f },
-        per_cycle: billings.map { |b| cycle_summary(b) }
+        total_events:  subscriptions.sum { |b| b.usage&.events&.count.to_i },
+        total_billed:  subscriptions.sum { |b| b.invoice&.amount.to_f },
+        per_cycle: subscriptions.map { |b| cycle_summary(b) }
       }
     end
 
@@ -470,7 +470,7 @@ Every request sends an `X-Api-Key` header. The API exposes full CRUD on every mo
 guarded by the domain rules (see the endpoint table in
 [README → Standalone usage](README.md#standalone-usage)).
 
-### Create a Plan and a Billing
+### Create a Plan and a Subscription
 
 ```http
 POST /billing/api/v1/plans
@@ -481,11 +481,11 @@ Content-Type: application/json
 ```
 
 ```http
-POST /billing/api/v1/billings
+POST /billing/api/v1/subscriptions
 X-Api-Key: <token>
 Content-Type: application/json
 
-{ "billing": { "billable_entity_type": "Customer", "billable_entity_id": 123, "plan_id": 1 } }
+{ "subscription": { "billable_entity_type": "Customer", "billable_entity_id": 123, "plan_id": 1 } }
 ```
 
 ### Record an event
@@ -502,8 +502,8 @@ Content-Type: application/json
 
 ```http
 POST /billing/api/v1/usages/:id/closure          # close the usage
-PUT  /billing/api/v1/billings/:id/plan            # associate a plan  { "plan_id": 2 }
-POST /billing/api/v1/billings/:id/finalization    # finalize the billing
+PUT  /billing/api/v1/subscriptions/:id/plan            # associate a plan  { "plan_id": 2 }
+POST /billing/api/v1/subscriptions/:id/finalization    # finalize the subscription
 POST /billing/api/v1/invoices/:id/issuance        # issue the invoice
 POST /billing/api/v1/invoices/:id/cancellation    # cancel the invoice
 POST /billing/api/v1/charges/:id/payment          # 501 until the Charge state machine ships
@@ -515,7 +515,7 @@ logic as embedded mode — the API is a thin HTTP surface, no parallel business 
 
 ## Testing
 
-> **Note.** The lifecycle and standalone-API specs below exercise **planned** behavior (`close!`, `finalize!`, the JSON API) and reference factory/attribute names from the target design. The specs that ship today live under `spec/` — model specs for `Plan`/`Billing` and the `for_billable_entity` scopes, plus request/routing specs for the portal — and use factories like `:active_billing_plan`, `:active_billing_billing`, etc. Run them with `bundle exec rspec` (PostgreSQL required).
+> **Note.** The lifecycle and standalone-API specs below exercise **planned** behavior (`close!`, `finalize!`, the JSON API) and reference factory/attribute names from the target design. The specs that ship today live under `spec/` — model specs for `Plan`/`Subscription` and the `for_billable_entity` scopes, plus request/routing specs for the portal — and use factories like `:active_billing_plan`, `:active_billing_subscription`, etc. Run them with `bundle exec rspec` (PostgreSQL required).
 
 ### Plan spec
 
@@ -532,36 +532,36 @@ end
 ### Billing lifecycle spec
 
 ```ruby
-RSpec.describe ActiveBilling::Billing do
-  subject(:billing) { create(:billing, plan: plan) }
+RSpec.describe ActiveBilling::Subscription do
+  subject(:subscription) { create(:subscription, plan: plan) }
   let(:plan) { create(:plan, recurring_amount: 99.00) }
 
   describe "#close!" do
     context "when usage has events" do
-      before { create_list(:event, 3, usage: billing.usage, kind: "api_call") }
+      before { create_list(:event, 3, usage: subscription.usage, kind: "api_call") }
 
       it "transitions the usage to closed" do
-        expect { billing.close! }.to change { billing.usage.reload.state }.from("open").to("closed")
+        expect { subscription.close! }.to change { subscription.usage.reload.state }.from("open").to("closed")
       end
 
       it "adds the plan recurring charge as a line item" do
-        expect { billing.close! }.to change { billing.line_items.where(key: "plan").count }.by(1)
+        expect { subscription.close! }.to change { subscription.line_items.where(key: "plan").count }.by(1)
       end
     end
   end
 
   describe "#finalize!" do
-    context "when billing is closed" do
-      before { billing.close! }
+    context "when subscription is closed" do
+      before { subscription.close! }
 
       it "produces an Invoice" do
-        expect { billing.finalize! }.to change(ActiveBilling::Invoice, :count).by(1)
+        expect { subscription.finalize! }.to change(ActiveBilling::Invoice, :count).by(1)
       end
     end
 
-    context "when billing is still open" do
+    context "when subscription is still open" do
       it "raises a validation error" do
-        expect { billing.finalize! }.to raise_error(ActiveRecord::RecordInvalid)
+        expect { subscription.finalize! }.to raise_error(ActiveRecord::RecordInvalid)
       end
     end
   end
@@ -571,21 +571,21 @@ end
 ### Adjustments spec
 
 ```ruby
-RSpec.describe ActiveBilling::Billing do
-  subject(:billing) { create(:billing, :closed) }
+RSpec.describe ActiveBilling::Subscription do
+  subject(:subscription) { create(:subscription, :closed) }
 
   describe "#apply_credit!" do
     it "creates a credit line item" do
-      expect { billing.apply_credit!(amount: 25.00, reason: "loyalty") }
-        .to change { billing.line_items.credits.count }.by(1)
+      expect { subscription.apply_credit!(amount: 25.00, reason: "loyalty") }
+        .to change { subscription.line_items.credits.count }.by(1)
     end
   end
 
   describe "#apply_discount!" do
     context "with percent" do
       it "stores the percentage and reason" do
-        billing.apply_discount!(percent: 10, reason: "promo")
-        expect(billing.line_items.discounts.last).to have_attributes(percent: 10, reason: "promo")
+        subscription.apply_discount!(percent: 10, reason: "promo")
+        expect(subscription.line_items.discounts.last).to have_attributes(percent: 10, reason: "promo")
       end
     end
   end
@@ -595,13 +595,13 @@ end
 ### Standalone API request spec
 
 ```ruby
-RSpec.describe "POST /billing/api/v1/billings", type: :request do
+RSpec.describe "POST /billing/api/v1/subscriptions", type: :request do
   let(:token) { create(:api_token) }
   let(:plan)  { create(:plan) }
 
   context "with a valid token" do
-    it "creates a billing" do
-      post "/billing/api/v1/billings",
+    it "creates a subscription" do
+      post "/billing/api/v1/subscriptions",
            params: { plan_id: plan.id, cycle_start: "2026-05-01", cycle_end: "2026-05-31", interval: "monthly" }.to_json,
            headers: { "X-Api-Key" => token.token, "Content-Type" => "application/json" }
 
@@ -611,7 +611,7 @@ RSpec.describe "POST /billing/api/v1/billings", type: :request do
 
   context "without a token" do
     it "returns 401" do
-      post "/billing/api/v1/billings"
+      post "/billing/api/v1/subscriptions"
       expect(response).to have_http_status(:unauthorized)
     end
   end

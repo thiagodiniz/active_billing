@@ -7,7 +7,7 @@ module ActiveBilling
     attribute :total_cost_in_cents, :active_billing_money
 
     belongs_to :billable_entity, polymorphic: true
-    belongs_to :billing, class_name: "ActiveBilling::Billing", optional: true
+    belongs_to :subscription, class_name: "ActiveBilling::Subscription", optional: true
 
     has_many :events, foreign_key: "billing_usage_id",
                       class_name: "ActiveBilling::Event",

@@ -7,7 +7,7 @@ FactoryBot.define do
     active { true }
   end
 
-  factory :active_billing_billing, class: "ActiveBilling::Billing" do
+  factory :active_billing_subscription, class: "ActiveBilling::Subscription" do
     association :billable_entity, factory: :store
     association :plan, factory: :active_billing_plan
     state { "open" }
@@ -35,7 +35,7 @@ FactoryBot.define do
 
   factory :active_billing_invoice, class: "ActiveBilling::Invoice" do
     association :resource, factory: :store
-    association :billing, factory: :active_billing_billing
+    association :subscription, factory: :active_billing_subscription
     state { "created" }
     amount_in_cents { 5_000 }
     description { "Test invoice" }

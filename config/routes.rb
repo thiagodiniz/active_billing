@@ -16,7 +16,7 @@ ActiveBilling::Engine.routes.draw do
     namespace :v1 do
       resources :plans, except: %i[new edit]
 
-      resources :billings, except: %i[new edit] do
+      resources :subscriptions, except: %i[new edit] do
         member do
           put :plan # associate a plan
           post :finalization

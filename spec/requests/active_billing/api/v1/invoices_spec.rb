@@ -4,13 +4,13 @@ RSpec.describe "ActiveBilling::Api::V1::Invoices", type: :request do
   include_context "api enabled"
 
   let(:store) { create(:store) }
-  let(:billing) { create(:active_billing_billing, billable_entity: store) }
+  let(:subscription) { create(:active_billing_subscription, billable_entity: store) }
   let(:base) { "/active_billing/api/v1/invoices" }
 
   describe "POST /invoices" do
     it "creates an invoice with amount as integer cents" do
       post base,
-           params: { invoice: { billing_id: billing.id, resource_type: "Store", resource_id: store.id,
+           params: { invoice: { subscription_id: subscription.id, resource_type: "Store", resource_id: store.id,
                                 description: "May usage", amount_in_cents: 5_000 } },
            headers: api_headers
 
@@ -22,7 +22,7 @@ RSpec.describe "ActiveBilling::Api::V1::Invoices", type: :request do
   describe "POST /invoices/:id/issuance" do
     context "when issuable" do
       it "issues the invoice" do
-        invoice = create(:active_billing_invoice, billing: billing)
+        invoice = create(:active_billing_invoice, subscription: subscription)
         post "#{base}/#{invoice.id}/issuance", headers: api_headers
         expect(json_body).to include("state" => "issued")
       end
@@ -30,7 +30,7 @@ RSpec.describe "ActiveBilling::Api::V1::Invoices", type: :request do
 
     context "when already issued" do
       it "responds with conflict" do
-        invoice = create(:active_billing_invoice, :issued, billing: billing)
+        invoice = create(:active_billing_invoice, :issued, subscription: subscription)
         post "#{base}/#{invoice.id}/issuance", headers: api_headers
         expect(response).to have_http_status(:conflict)
       end
@@ -40,7 +40,7 @@ RSpec.describe "ActiveBilling::Api::V1::Invoices", type: :request do
   describe "POST /invoices/:id/cancellation" do
     context "when cancellable" do
       it "cancels the invoice" do
-        invoice = create(:active_billing_invoice, :issued, billing: billing)
+        invoice = create(:active_billing_invoice, :issued, subscription: subscription)
         post "#{base}/#{invoice.id}/cancellation", headers: api_headers
         expect(json_body).to include("state" => "cancelled")
       end
@@ -48,7 +48,7 @@ RSpec.describe "ActiveBilling::Api::V1::Invoices", type: :request do
 
     context "when not cancellable" do
       it "responds with conflict" do
-        invoice = create(:active_billing_invoice, billing: billing)
+        invoice = create(:active_billing_invoice, subscription: subscription)
         post "#{base}/#{invoice.id}/cancellation", headers: api_headers
         expect(response).to have_http_status(:conflict)
       end
@@ -57,7 +57,7 @@ RSpec.describe "ActiveBilling::Api::V1::Invoices", type: :request do
 
   describe "DELETE /invoices/:id" do
     it "soft-deletes the invoice" do
-      invoice = create(:active_billing_invoice, billing: billing)
+      invoice = create(:active_billing_invoice, subscription: subscription)
       expect do
         delete "#{base}/#{invoice.id}", headers: api_headers
       end.not_to change(ActiveBilling::Invoice, :count)
@@ -66,7 +66,7 @@ RSpec.describe "ActiveBilling::Api::V1::Invoices", type: :request do
   end
 
   describe "nested items" do
-    let(:invoice) { create(:active_billing_invoice, billing: billing) }
+    let(:invoice) { create(:active_billing_invoice, subscription: subscription) }
 
     it "creates an item under an issuable invoice" do
       post "#{base}/#{invoice.id}/items",
@@ -77,7 +77,7 @@ RSpec.describe "ActiveBilling::Api::V1::Invoices", type: :request do
 
     context "when the invoice is issued" do
       it "rejects item writes with conflict" do
-        issued = create(:active_billing_invoice, :issued, billing: billing)
+        issued = create(:active_billing_invoice, :issued, subscription: subscription)
         post "#{base}/#{issued.id}/items",
              params: { item: { key: "api_calls", quantity: 10, unit_price: 1.5 } },
              headers: api_headers
