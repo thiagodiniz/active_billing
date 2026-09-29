@@ -2,10 +2,10 @@ require "rails_helper"
 
 module ActiveBilling
   RSpec.describe Invoice, type: :model do
-    subject(:invoice) { create(:active_billing_invoice, billing: billing, resource: store) }
+    subject(:invoice) { create(:active_billing_invoice, subscription: subscription, resource: store) }
 
     let(:store) { create(:store) }
-    let(:billing) { create(:active_billing_billing, billable_entity: store) }
+    let(:subscription) { create(:active_billing_subscription, billable_entity: store) }
     let(:usage) { create(:active_billing_usage, billable_entity: store) }
     let(:other_usage) do
       create(:active_billing_usage, billable_entity: store, month: 1.month.ago.to_date.beginning_of_month)
@@ -24,7 +24,7 @@ module ActiveBilling
       end
 
       context "with a zero amount" do
-        subject(:invoice) { build(:active_billing_invoice, billing: billing, amount_in_cents: 0) }
+        subject(:invoice) { build(:active_billing_invoice, subscription: subscription, amount_in_cents: 0) }
 
         it { is_expected.to be_valid }
       end
@@ -51,7 +51,7 @@ module ActiveBilling
       end
 
       context "when the invoice is issued" do
-        subject(:invoice) { create(:active_billing_invoice, :issued, billing: billing, resource: store) }
+        subject(:invoice) { create(:active_billing_invoice, :issued, subscription: subscription, resource: store) }
 
         it "rejects the change" do
           invoice.add_usages_ids = [usage.id]
@@ -104,7 +104,7 @@ module ActiveBilling
 
     describe "#set_description" do
       subject(:invoice) do
-        build(:active_billing_invoice, billing: billing, description: nil, add_usages_ids: [usage.id])
+        build(:active_billing_invoice, subscription: subscription, description: nil, add_usages_ids: [usage.id])
       end
 
       before { create(:active_billing_event, usage: usage, resource: store) }

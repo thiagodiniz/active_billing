@@ -13,17 +13,17 @@ The gem supports two install modes from the same codebase:
 
 | Model         | Role                                                                          |
 | ------------- | ----------------------------------------------------------------------------- |
-| `Plan`        | Catalog entry: recurring price + included allowances. Snapshotted onto Billing. |
-| `Billing`     | One configured billing cycle for a billable entity. Aggregates Usages + plan snapshot + adjustments (line items, credits, discounts). Mutable until finalized. |
+| `Plan`        | Catalog entry: recurring price + included allowances. Snapshotted onto Subscription. |
+| `Subscription`     | One configured billing cycle for a billable entity. Aggregates Usages + plan snapshot + adjustments (line items, credits, discounts). Mutable until finalized. |
 | `Usage`       | Per-period measurement bucket. Open while the cycle runs; **closed** at cycle end and immutable thereafter. |
 | `Event`       | Append-only billable action recorded against a Usage.                         |
-| `Invoice`     | Document produced when a Billing is finalized. State-machine: created → processing → issued → cancelled / failed. |
+| `Invoice`     | Document produced when a Subscription is finalized. State-machine: created → processing → issued → cancelled / failed. |
 | `InvoiceItem` | Line item owned by an Invoice.                                                |
 | `Charge`      | Payment record. The state machine and payment-provider adapters are roadmap; today it ships as a record only. |
 
-Lifecycle: **configure Billing → record Events → close Usage → adjust Billing → finalize → Invoice → Charge.** Never bypass this order in new code.
+Lifecycle: **configure Subscription → record Events → close Usage → adjust Subscription → finalize → Invoice → Charge.** Never bypass this order in new code.
 
-Model naming is locked — do not rename `Usage`, `Event`, `Invoice`, `InvoiceItem`, or `Charge`. `Billing` and `Plan` are the only new top-level models.
+Model naming is locked — do not rename `Usage`, `Event`, `Invoice`, `InvoiceItem`, or `Charge`. `Subscription` and `Plan` are the only new top-level models.
 
 ## UI Component Library
 

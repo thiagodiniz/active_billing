@@ -4,12 +4,12 @@ RSpec.describe ActiveBilling::InvoicePdf do
   subject(:pdf) { described_class.new(invoice) }
 
   let(:store) { create(:store, name: "Acme Store") }
-  let(:billing) do
-    create(:active_billing_billing, billable_entity: store,
-                                    period_start: Date.new(2026, 1, 1), period_end: Date.new(2026, 1, 31))
+  let(:subscription) do
+    create(:active_billing_subscription, billable_entity: store,
+                                         period_start: Date.new(2026, 1, 1), period_end: Date.new(2026, 1, 31))
   end
-  let(:invoice) { create(:active_billing_invoice, :issued, billing: billing, amount_in_cents: 1_500) }
-  let(:company) { { name: "Example, LLC", address: "123 Fake Street", email: "billing@example.com" } }
+  let(:invoice) { create(:active_billing_invoice, :issued, subscription: subscription, amount_in_cents: 1_500) }
+  let(:company) { { name: "Example, LLC", address: "123 Fake Street", email: "subscription@example.com" } }
 
   around do |example|
     original = ActiveBilling.configuration.dup
@@ -109,7 +109,8 @@ RSpec.describe ActiveBilling::InvoicePdf do
 
       context "with markup in the invoice description" do
         let(:invoice) do
-          create(:active_billing_invoice, :issued, billing: billing, amount_in_cents: 1_500, description: "A <b>B</b>")
+          create(:active_billing_invoice, :issued, subscription: subscription, amount_in_cents: 1_500,
+                                                   description: "A <b>B</b>")
         end
 
         it "escapes the value" do

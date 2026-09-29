@@ -26,7 +26,7 @@ module ActiveBilling
         # Hard delete only if the plan was never used; otherwise deactivate.
         def destroy
           @plan = find_plan
-          if @plan.billings.exists?
+          if @plan.subscriptions.exists?
             @plan.update!(active: false)
             render :show
           else

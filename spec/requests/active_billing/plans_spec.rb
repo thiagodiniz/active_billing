@@ -4,10 +4,10 @@ RSpec.describe "ActiveBilling::Plans", type: :request do
   let(:store) { create(:store) }
 
   describe "GET /active_billing/plan" do
-    context "when the entity has a current billing with a plan" do
+    context "when the entity has a current subscription with a plan" do
       it "shows the current plan name" do
         plan = create(:active_billing_plan, name: "Growth")
-        create(:active_billing_billing, billable_entity: store, plan: plan)
+        create(:active_billing_subscription, billable_entity: store, plan: plan)
 
         get "/active_billing/plan", headers: as_entity(store)
 
@@ -16,7 +16,7 @@ RSpec.describe "ActiveBilling::Plans", type: :request do
       end
     end
 
-    context "when the entity has no billing" do
+    context "when the entity has no subscription" do
       it "renders the no-billing message" do
         get "/active_billing/plan", headers: as_entity(store)
         expect(response.body).to include(I18n.t("active_billing.plan.no_billing"))

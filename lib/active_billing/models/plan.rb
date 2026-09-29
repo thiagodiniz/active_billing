@@ -11,7 +11,7 @@ module ActiveBilling
       yearly: "yearly"
     }, default: "monthly"
 
-    has_many :billings, class_name: "ActiveBilling::Billing", dependent: :nullify
+    has_many :subscriptions, class_name: "ActiveBilling::Subscription", dependent: :nullify
 
     validates :name, presence: true
     validates :price_in_cents, comparison: { greater_than_or_equal_to: 0 }

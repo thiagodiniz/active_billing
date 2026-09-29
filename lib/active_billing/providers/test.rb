@@ -47,17 +47,17 @@ module ActiveBilling
         remember(:plans, __method__, plan, { external_id: reference.external_id, status: "archived" })
       end
 
-      def create_subscription(billing, account, plan_reference)
-        remember(:subscriptions, __method__, billing,
+      def create_subscription(subscription, account, plan_reference)
+        remember(:subscriptions, __method__, subscription,
                  customer_id: account.external_customer_id, plan_id: plan_reference&.external_id, status: "active")
       end
 
-      def update_subscription(billing, reference)
-        remember(:subscriptions, __method__, billing, external_id: reference.external_id, status: "active")
+      def update_subscription(subscription, reference)
+        remember(:subscriptions, __method__, subscription, external_id: reference.external_id, status: "active")
       end
 
-      def cancel_subscription(billing, reference)
-        remember(:subscriptions, __method__, billing, external_id: reference.external_id, status: "cancelled")
+      def cancel_subscription(subscription, reference)
+        remember(:subscriptions, __method__, subscription, external_id: reference.external_id, status: "cancelled")
       end
 
       def create_payment(charge, account)

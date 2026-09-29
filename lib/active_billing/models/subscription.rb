@@ -1,5 +1,5 @@
 module ActiveBilling
-  class Billing < ActiveRecord::Base
+  class Subscription < ActiveRecord::Base
     include Concerns::ProviderSyncable
 
     include Discard::Model
@@ -34,13 +34,13 @@ module ActiveBilling
     end
 
     def associate_plan!(new_plan)
-      raise ActiveBilling::Error, "billing is not open" unless open?
+      raise ActiveBilling::Error, "subscription is not open" unless open?
 
       update!(plan: new_plan)
     end
 
     def finalize!
-      raise ActiveBilling::Error, "billing is not open" unless open?
+      raise ActiveBilling::Error, "subscription is not open" unless open?
 
       finalized!
     end
