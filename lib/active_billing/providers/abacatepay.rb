@@ -63,14 +63,14 @@ module ActiveBilling
 
       # --- Subscriptions ------------------------------------------------------
 
-      def create_subscription(billing, account, plan_reference)
-        data = client.post("/subscriptions/create", subscription_attributes(billing, account, plan_reference))
+      def create_subscription(subscription, account, plan_reference)
+        data = client.post("/subscriptions/create", subscription_attributes(subscription, account, plan_reference))
         Result.new(external_id: data["id"], status: "pending", url: data["url"], raw: data)
       end
 
-      def update_subscription(billing, reference)
-        plan_reference = billing.plan&.provider_reference_for(provider_name)
-        raise Error, "#{provider_name}: billing has no synced plan to change to" if plan_reference.nil?
+      def update_subscription(subscription, reference)
+        plan_reference = subscription.plan&.provider_reference_for(provider_name)
+        raise Error, "#{provider_name}: subscription has no synced plan to change to" if plan_reference.nil?
 
         data = client.post("/subscriptions/change-plan",
                            subscriptionId: subscription_id_for(reference), productId: plan_reference.external_id)

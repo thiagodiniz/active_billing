@@ -24,7 +24,7 @@ RSpec.describe ActiveBilling::Providers::Abacatepay do
   let(:plan_reference) do
     ActiveBilling::Providers::Reference.new(provider: "abacatepay", external_id: "prod_1", metadata: {})
   end
-  let(:billing) { build_stubbed(:active_billing_billing, uuid: billing_uuid, plan: plan) }
+  let(:subscription) { build_stubbed(:active_billing_subscription, uuid: billing_uuid, plan: plan) }
   let(:invoice) do
     build_stubbed(:active_billing_invoice, uuid: invoice_uuid, amount_in_cents: 5_000, description: "Invoice #1")
   end
@@ -189,12 +189,12 @@ RSpec.describe ActiveBilling::Providers::Abacatepay do
     end
 
     it "posts a subscription checkout" do
-      adapter.create_subscription(billing, account, plan_reference)
+      adapter.create_subscription(subscription, account, plan_reference)
       expect(stub).to have_been_requested
     end
 
     it "returns the checkout id, url and pending status" do
-      result = adapter.create_subscription(billing, account, plan_reference)
+      result = adapter.create_subscription(subscription, account, plan_reference)
       expect(result.to_h).to include(external_id: "bill_1", status: "pending", url: "https://app.abacatepay.com/pay/bill_1")
     end
   end
@@ -217,12 +217,12 @@ RSpec.describe ActiveBilling::Providers::Abacatepay do
     end
 
     it "changes the plan of the activated subscription" do
-      adapter.update_subscription(billing, reference)
+      adapter.update_subscription(subscription, reference)
       expect(stub).to have_been_requested
     end
 
     it "keeps the checkout id as external id" do
-      expect(adapter.update_subscription(billing, reference).external_id).to eq("bill_1")
+      expect(adapter.update_subscription(subscription, reference).external_id).to eq("bill_1")
     end
 
     context "when the subscription was never activated" do
@@ -232,7 +232,7 @@ RSpec.describe ActiveBilling::Providers::Abacatepay do
 
       it "raises an error" do
         expect do
-          adapter.update_subscription(billing, reference)
+          adapter.update_subscription(subscription, reference)
         end.to raise_error(ActiveBilling::Providers::Error, /not been activated/)
       end
     end
@@ -250,12 +250,12 @@ RSpec.describe ActiveBilling::Providers::Abacatepay do
     end
 
     it "cancels the subscription" do
-      adapter.cancel_subscription(billing, reference)
+      adapter.cancel_subscription(subscription, reference)
       expect(stub).to have_been_requested
     end
 
     it "returns the cancelled status" do
-      expect(adapter.cancel_subscription(billing, reference).status).to eq("cancelled")
+      expect(adapter.cancel_subscription(subscription, reference).status).to eq("cancelled")
     end
   end
 

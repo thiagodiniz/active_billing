@@ -89,7 +89,7 @@ This release reframes the gem around a **Subscription** entity that owns one con
 - Concerns: Chargeable, NfeDescription, CurrencyAttribute, TimestampStoreAccessor
 - Database migrations for PostgreSQL
 - Comprehensive documentation and examples
-- Support for usage-based and subscription billing
+- Support for usage-based and subscription subscription
 - Invoice lifecycle management
 - Email tracking capabilities
 - NFe integration support
