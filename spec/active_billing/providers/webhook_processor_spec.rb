@@ -42,32 +42,32 @@ module ActiveBilling
       end
 
       context "with a subscription event" do
-        let(:billing) { create(:active_billing_billing) }
+        let(:subscription) { create(:active_billing_subscription) }
         let(:payload) { { type: "subscription_cancelled", id: "sub_1" }.to_json }
 
         before do
-          billing.update!(provider: "test", provider_id: "sub_1", provider_ids: { "test" => { "id" => "sub_1" } })
+          subscription.update!(provider: "test", provider_id: "sub_1", provider_ids: { "test" => { "id" => "sub_1" } })
         end
 
-        it "records the status on the billing" do
+        it "records the status on the subscription" do
           processor.call(payload, headers)
-          expect(billing.reload.provider_reference_for(:test).metadata["status"]).to eq("cancelled")
+          expect(subscription.reload.provider_reference_for(:test).metadata["status"]).to eq("cancelled")
         end
 
-        context "when the billing moved to another provider" do
+        context "when the subscription moved to another provider" do
           before do
-            billing.update!(provider: "other", provider_id: "x",
-                            provider_ids: billing.provider_ids.merge("other" => { "id" => "x" }))
+            subscription.update!(provider: "other", provider_id: "x",
+                                 provider_ids: subscription.provider_ids.merge("other" => { "id" => "x" }))
           end
 
           it "still finds it by the old id" do
             processor.call(payload, headers)
-            expect(billing.reload.provider_ids.dig("test", "status")).to eq("cancelled")
+            expect(subscription.reload.provider_ids.dig("test", "status")).to eq("cancelled")
           end
 
           it "keeps the current provider" do
             processor.call(payload, headers)
-            expect(billing.reload.provider).to eq("other")
+            expect(subscription.reload.provider).to eq("other")
           end
         end
       end

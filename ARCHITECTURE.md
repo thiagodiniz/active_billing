@@ -2,7 +2,7 @@
 
 This document describes the architecture and design decisions behind ActiveBilling.
 
-> **Implementation status.** This document describes the target architecture. Implemented today: the domain models (`Plan`, `Billing`, `Usage`, `Event`, `Invoice`, `InvoiceItem`, `Charge`), the polymorphic billable-entity design, `for_billable_entity` scoping, the read-only **portal web UI**, the guarded lifecycle transitions (`Usage#close!`, `Billing#finalize!`, `Invoice#issue!`/`#cancel!`), and the standalone **JSON API** — all with override generators. **Planned** (marked inline): `BillingLineItem` adjustments and the full `Charge` state machine.
+> **Implementation status.** This document describes the target architecture. Implemented today: the domain models (`Plan`, `Subscription`, `Usage`, `Event`, `Invoice`, `InvoiceItem`, `Charge`), the polymorphic billable-entity design, `for_billable_entity` scoping, the read-only **portal web UI**, the guarded lifecycle transitions (`Usage#close!`, `Subscription#finalize!`, `Invoice#issue!`/`#cancel!`), and the standalone **JSON API** — all with override generators. **Planned** (marked inline): `BillingLineItem` adjustments and the full `Charge` state machine.
 
 ## Overview
 
@@ -15,30 +15,30 @@ Both modes share the same domain model and lifecycle. Standalone is the embedded
 
 ## Core concepts
 
-### Billing — the central record
+### Subscription — the central record
 
-A `Billing` represents **one configured billing cycle for one billable entity**. It carries:
+A `Subscription` represents **one configured billing cycle for one billable entity**. It carries:
 
 - the cycle window (`period_start`, `period_end`)
-- a **snapshot** of the attached `Plan` (`plan_name`, `plan_price_in_cents`, `plan_allowances`) so plan catalog edits never rewrite past Billings
+- a **snapshot** of the attached `Plan` (`plan_name`, `plan_price_in_cents`, `plan_allowances`) so plan catalog edits never rewrite past Subscriptions
 - references to one or more `Usage` records measured during the cycle (`has_many :usages`)
 - a `state` of `open`/`finalized`
 - _(planned)_ a collection of `BillingLineItem` adjustments (extra items, credits, discounts) added between close and finalize
 
-A Billing is mutable until it is finalized. Finalization is intended to produce an `Invoice` (the `finalize!` helper is planned).
+A Subscription is mutable until it is finalized. Finalization is intended to produce an `Invoice` (the `finalize!` helper is planned).
 
 ### Usage — the measurement
 
 A `Usage` is the per-period measurement bucket for one billable entity. While the cycle is open, the host appends `Event` records (API calls, SMS sent, storage consumed, etc.) to it. At cycle end, the Usage is **closed**: no more events may be appended, and its derived line items are computed.
 
-Usage and Billing are intentionally separate:
+Usage and Subscription are intentionally separate:
 
 - Usage models *what was consumed*; once closed, it must never change (audit invariant).
-- Billing models *what will be invoiced*; it is editable so credits, discounts, and manual items can be applied without violating the closed-Usage invariant.
+- Subscription models *what will be invoiced*; it is editable so credits, discounts, and manual items can be applied without violating the closed-Usage invariant.
 
 ### Plan
 
-`Plan` is a catalog model owned by the gem: `name`, `price`/`price_in_cents`, `interval` (`monthly`/`yearly`), `allowances`, `active`, and metadata. When a Billing references a Plan, the Plan's relevant fields are **snapshotted** onto the Billing (`plan_name`, `plan_price_in_cents`, `plan_allowances`) on validation while the Billing is `open`. Future edits to the Plan catalog do not retroactively change past Billings.
+`Plan` is a catalog model owned by the gem: `name`, `price`/`price_in_cents`, `interval` (`monthly`/`yearly`), `allowances`, `active`, and metadata. When a Subscription references a Plan, the Plan's relevant fields are **snapshotted** onto the Subscription (`plan_name`, `plan_price_in_cents`, `plan_allowances`) on validation while the Subscription is `open`. Future edits to the Plan catalog do not retroactively change past Subscriptions.
 
 ### Invoice and Charge
 
@@ -47,16 +47,16 @@ The Invoice is the finalized billing document, with a working state machine (`cr
 ## Lifecycle
 
 ```
-1. Configure cycle      Billing.create!(plan:, cycle_start:, cycle_end:, interval:)
-                        └─ snapshots Plan onto Billing; opens a Usage
-2. Record consumption   billing.usage.events.create!(...)
-3. Close cycle          billing.close!
+1. Configure cycle      Subscription.create!(plan:, cycle_start:, cycle_end:, interval:)
+                        └─ snapshots Plan onto Subscription; opens a Usage
+2. Record consumption   subscription.usage.events.create!(...)
+3. Close cycle          subscription.close!
                         └─ Usage state → "closed"; usage-derived items computed
                         └─ Plan recurring charge added from snapshot
-4. Adjust               billing.line_items.create!(...), apply_credit!, apply_discount!,
+4. Adjust               subscription.line_items.create!(...), apply_credit!, apply_discount!,
                         add_usage!(other_closed_usage)
-5. Finalize             billing.finalize!
-                        └─ Invoice + InvoiceItems generated; Billing locked
+5. Finalize             subscription.finalize!
+                        └─ Invoice + InvoiceItems generated; Subscription locked
 6. Issue                invoice.issue!  → Charge created
 7. Collect              charge.mark_processing! / mark_paid! / mark_failed!
 ```
@@ -65,7 +65,7 @@ The Invoice is the finalized billing document, with a working state machine (`cr
 
 ### Entity relationship diagram
 
-> The diagram shows the target design. In the **implemented** models, `Plan` uses `price_in_cents`/`allowances` (not `recurring_amount`/`included_allowances`), `Billing` uses `period_start`/`period_end` and `state` is `open`/`finalized`, and `BillingLineItem` is planned.
+> The diagram shows the target design. In the **implemented** models, `Plan` uses `price_in_cents`/`allowances` (not `recurring_amount`/`included_allowances`), `Subscription` uses `period_start`/`period_end` and `state` is `open`/`finalized`, and `BillingLineItem` is planned.
 
 ```
 ┌─────────────────────────┐
@@ -75,7 +75,7 @@ The Invoice is the finalized billing document, with a working state machine (`cr
              │ has_many
              ▼
 ┌─────────────────────────┐        ┌──────────────────────┐
-│ Plan                    │◄───────│ Billing              │
+│ Plan                    │◄───────│ Subscription              │
 │ - name                  │ snapshot│ - cycle_start         │
 │ - recurring_amount      │         │ - cycle_end           │
 │ - included_allowances   │         │ - interval            │
@@ -99,7 +99,7 @@ The Invoice is the finalized billing document, with a working state machine (`cr
                           │ (append-only)│
                           └──────────────┘
 
-                          Billing ──finalize──► Invoice ──► InvoiceItem
+                          Subscription ──finalize──► Invoice ──► InvoiceItem
                                                    │
                                                    ▼
                                                 Charge
@@ -107,30 +107,30 @@ The Invoice is the finalized billing document, with a working state machine (`cr
 
 ### Key relationships
 
-- **Billable Entity → Billing**: one-to-many. A customer has one Billing per cycle.
-- **Plan → Billing**: many-to-one *by reference*, one-to-one *by snapshot*. The Billing keeps its own copy of the plan fields it cares about.
-- **Billing → Usage**: one-to-many. Usually 1:1, but multiple closed Usages can be combined into a single Billing.
+- **Billable Entity → Subscription**: one-to-many. A customer has one Subscription per cycle.
+- **Plan → Subscription**: many-to-one *by reference*, one-to-one *by snapshot*. The Subscription keeps its own copy of the plan fields it cares about.
+- **Subscription → Usage**: one-to-many. Usually 1:1, but multiple closed Usages can be combined into a single Subscription.
 - **Usage → Event**: one-to-many, append-only.
-- **Billing → Invoice**: one-to-one. Finalizing a Billing produces exactly one Invoice.
+- **Subscription → Invoice**: one-to-one. Finalizing a Subscription produces exactly one Invoice.
 - **Invoice → Charge**: one-to-many (in case of retries).
 
 ## Design patterns
 
 ### Snapshot, don't reference
 
-The Plan attached to a Billing is *snapshotted*. The Billing holds its own copy of `plan_name`, `plan_price_in_cents`, and `plan_allowances`. This protects historical Billings from catalog edits and keeps audits straightforward.
+The Plan attached to a Subscription is *snapshotted*. The Subscription holds its own copy of `plan_name`, `plan_price_in_cents`, and `plan_allowances`. This protects historical Subscriptions from catalog edits and keeps audits straightforward.
 
 ### Two-phase consumption
 
-Usage is the **measurement** phase (immutable once closed). Billing is the **assembly** phase (editable until finalized). This separation lets credits, discounts, and manual adjustments happen without touching the audit-critical Usage data.
+Usage is the **measurement** phase (immutable once closed). Subscription is the **assembly** phase (editable until finalized). This separation lets credits, discounts, and manual adjustments happen without touching the audit-critical Usage data.
 
 ### Polymorphic billable entity
 
-`Billing` and `Usage` belong polymorphically to `billable_entity`. Host apps point it at any model that responds to the configured `billing_entity_method` (default: `:billing_entity`).
+`Subscription` and `Usage` belong polymorphically to `billable_entity`. Host apps point it at any model that responds to the configured `billing_entity_method` (default: `:billing_entity`).
 
 ### Template-method pricing
 
-`Billing#event_price_for(kind)` and `Billing#calculate_event_cost(event)` are extension points. Host apps override them in a subclass to plug in tiered pricing, volume discounts, etc.
+`Subscription#event_price_for(kind)` and `Subscription#calculate_event_cost(event)` are extension points. Host apps override them in a subclass to plug in tiered pricing, volume discounts, etc.
 
 ### Concerns for cross-cutting behavior
 
@@ -145,23 +145,23 @@ Monetary columns (`*_in_cents`) are mapped with a custom ActiveRecord type, `Act
 
 ```
 Usage:    open      → closed
-Billing:  open      → closed  → finalized
+Subscription:  open      → closed  → finalized
 Invoice:  created   → processing → issued    → cancelled / failed
 Charge:   created   → processing → paid / failed / expired
 ```
 
 Transitions are guarded by `validate` methods, not by external state-machine gems.
 
-## Billing as the resource ↔ billable-entity connector
+## Subscription as the resource ↔ billable-entity connector
 
-`Billing` is what links the *thing being measured* to the *party that pays*. `Usage` records carry their own polymorphic `billable_entity` (e.g. an individual store), while `Billing` carries the polymorphic `billable_entity` of the payer (which may be that same store, or a parent like a chain). Because a `Billing` `has_many :usages` and `has_many :invoices`, several stores' usages can roll up into **one** Billing → Invoice → Charge (unified billing), or each store can keep its own Billing (per-store billing). This is why `Invoice` and `Charge` reach a billable entity *through* their `Billing` (`for_billable_entity` joins `active_billing_billings`), while `Usage` filters on its own columns.
+`Subscription` is what links the *thing being measured* to the *party that pays*. `Usage` records carry their own polymorphic `billable_entity` (e.g. an individual store), while `Subscription` carries the polymorphic `billable_entity` of the payer (which may be that same store, or a parent like a chain). Because a `Subscription` `has_many :usages` and `has_many :invoices`, several stores' usages can roll up into **one** Subscription → Invoice → Charge (unified subscription), or each store can keep its own Subscription (per-store subscription). This is why `Invoice` and `Charge` reach a billable entity *through* their `Subscription` (`for_billable_entity` joins `active_billing_subscriptions`), while `Usage` filters on its own columns.
 
 ## Web UI (portal)
 
 The engine ships a small **read-only** web surface used directly when the engine is mounted:
 
 - `PortalController` resolves the billable entity from `billable_entity_id` + `billable_entity_type` (the latter defaulting to `config.billable_entity_class`), and returns 400 on `index` when it is missing.
-- `Invoices`/`Usages`/`Charges` expose `index` + `show`; `Plans` exposes `show` (the current plan from the entity's open `Billing`).
+- `Invoices`/`Usages`/`Charges` expose `index` + `show`; `Plans` exposes `show` (the current plan from the entity's open `Subscription`).
 - Views are plain ERB resolved from the engine's view path. Hosts override them by generating local copies (`active_billing:views` / `active_billing:controllers`), which Rails resolves ahead of the engine's.
 
 Authentication is deliberately left to the host app. An authenticated admin UI is not part of this surface.
@@ -170,7 +170,7 @@ Authentication is deliberately left to the host app. An authenticated admin UI i
 
 ### Embedded mode
 
-The host Rails app `require`s the gem and calls `ActiveBilling::Billing.create!`, `ActiveBilling::Billing.current_for(entity)`, etc. directly, and may mount the engine for the read-only portal. (Lifecycle helpers like `billing.close!` are **planned**.)
+The host Rails app `require`s the gem and calls `ActiveBilling::Subscription.create!`, `ActiveBilling::Subscription.current_for(entity)`, etc. directly, and may mount the engine for the read-only portal. (Lifecycle helpers like `subscription.close!` are **planned**.)
 
 ### Standalone mode
 
@@ -201,8 +201,8 @@ When `api_enabled` is false (embedded mode default), every API route responds `4
 
 ```
 host app action
-    └─ resolve billing for the current cycle
-       └─ append event to billing.usage (open Usage)
+    └─ resolve subscription for the current cycle
+       └─ append event to subscription.usage (open Usage)
           └─ event persisted with metadata + chargeable flag
 ```
 
@@ -210,7 +210,7 @@ host app action
 
 ```
 scheduled job / manual trigger
-    └─ Billing#close!
+    └─ Subscription#close!
        ├─ Usage.transition_to(:closed)
        ├─ derive line items from usage events
        └─ append plan recurring charge from snapshot
@@ -220,11 +220,11 @@ scheduled job / manual trigger
 
 ```
 host app / admin
-    └─ Billing#line_items.create!, apply_credit!, apply_discount!
-    └─ Billing#finalize!
+    └─ Subscription#line_items.create!, apply_credit!, apply_discount!
+    └─ Subscription#finalize!
        ├─ recompute totals
        ├─ create Invoice + InvoiceItems
-       └─ Billing.transition_to(:finalized)
+       └─ Subscription.transition_to(:finalized)
 ```
 
 ### Issue + payment
@@ -242,20 +242,20 @@ host app / scheduled job
 ### Critical indexes
 
 ```
-billings:        (billable_entity_type, billable_entity_id, cycle_start)
+subscriptions:        (billable_entity_type, billable_entity_id, cycle_start)
                  (state)
 usages:          (billable_entity_type, billable_entity_id, month) UNIQUE
                  (state)
 events:          (billing_usage_id, kind)
                  (resource_type, resource_id)
-invoices:        (state), (billing_id), (resource_type, resource_id)
+invoices:        (state), (subscription_id), (resource_type, resource_id)
 charges:         (invoice_id), (state)
 plans:           (name) UNIQUE-ish
 ```
 
 ### Query optimization
 
-- `includes(:plan_snapshot, usage: :events)` for Billing queries
+- `includes(:plan_snapshot, usage: :events)` for Subscription queries
 - Counter caches for `events_count` on Usage if event volume is high
 - Batched event inserts (`Event.insert_all`) for high-throughput producers
 
@@ -267,7 +267,7 @@ For very high event volumes, denormalize per-kind counts onto Usage and update t
 
 | Where                                          | What you override                                 |
 | ---------------------------------------------- | ------------------------------------------------- |
-| Subclass `ActiveBilling::Billing`              | Pricing, custom adjustments, lifecycle hooks      |
+| Subclass `ActiveBilling::Subscription`              | Pricing, custom adjustments, lifecycle hooks      |
 | Subclass `ActiveBilling::Plan`                 | Plan validation, derived fields                   |
 | `ActiveBilling::Event.kinds.merge!(...)`       | Add custom event types                            |
 | `ActiveBilling::Charge` callbacks              | Payment-gateway integration                       |
@@ -276,17 +276,17 @@ For very high event volumes, denormalize per-kind counts onto Usage and update t
 
 ## Security considerations
 
-- **Data integrity** — closed Usage is immutable; finalized Billing is immutable; invoice items are owned by Invoice.
+- **Data integrity** — closed Usage is immutable; finalized Subscription is immutable; invoice items are owned by Invoice.
 - **Monetary precision** — all money stored as integer cents; exposed as `ActiveBilling::Money` value objects (BigDecimal-backed) via a custom attribute type.
-- **Idempotency** — every Billing/Invoice/Charge carries a UUID; standalone endpoints accept an `Idempotency-Key` header (roadmap).
+- **Idempotency** — every Subscription/Invoice/Charge carries a UUID; standalone endpoints accept an `Idempotency-Key` header (roadmap).
 - **API auth** — standalone mode requires `config.api_authorizer` to be set; the engine refuses requests otherwise.
 
 ## Testing strategy
 
 - **Unit tests** — validations, pricing, state transitions, snapshot integrity.
-- **Integration tests** — full lifecycle (create Billing → close → adjust → finalize → issue → pay).
+- **Integration tests** — full lifecycle (create Subscription → close → adjust → finalize → issue → pay).
 - **API tests** — round-trip every endpoint in standalone mode; assert auth is enforced.
-- **Performance tests** — high event volume, multi-Usage Billings.
+- **Performance tests** — high event volume, multi-Usage Subscriptions.
 
 See `CLAUDE.md` for the RSpec conventions enforced in this repo.
 

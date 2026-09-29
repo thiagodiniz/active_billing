@@ -59,11 +59,11 @@ module ActiveBilling
     describe "subscriptions" do
       let(:plan) { create(:active_billing_plan) }
 
-      subject(:billing) { create(:active_billing_billing, billable_entity: store, plan: plan) }
+      subject(:subscription) { create(:active_billing_subscription, billable_entity: store, plan: plan) }
 
       context "when the entity has no provider account" do
         it "does nothing" do
-          billing
+          subscription
           expect(calls).not_to include(:create_subscription)
         end
       end
@@ -72,23 +72,23 @@ module ActiveBilling
         before { create(:active_billing_provider_account, billable_entity: store) }
 
         it "creates the remote subscription" do
-          expect(billing.provider_reference_for(:test)).to be_present
+          expect(subscription.provider_reference_for(:test)).to be_present
         end
 
         it "passes the customer and plan references" do
-          billing
+          subscription
           record = Providers::Test.store[:subscriptions].values.first
           expect(record).to include(customer_id: a_string_starting_with("customer_"),
                                     plan_id: plan.provider_reference_for(:test).external_id)
         end
 
         it "cancels the remote subscription when finalized" do
-          billing.update!(state: "finalized")
+          subscription.update!(state: "finalized")
           expect(calls.last).to eq(:cancel_subscription)
         end
 
         it "updates the remote subscription when the period changes" do
-          billing.update!(period_end: Date.current)
+          subscription.update!(period_end: Date.current)
           expect(calls.last).to eq(:update_subscription)
         end
       end
@@ -97,7 +97,7 @@ module ActiveBilling
         before { create(:active_billing_provider_account, billable_entity: store, skip_provider_sync: true) }
 
         it "creates the customer first" do
-          billing
+          subscription
           expect(calls).to include(:create_customer, :create_subscription)
         end
       end
@@ -106,7 +106,7 @@ module ActiveBilling
     describe "payments" do
       let(:invoice) do
         create(:active_billing_invoice, resource: store,
-                                        billing: create(:active_billing_billing, billable_entity: store))
+                                        subscription: create(:active_billing_subscription, billable_entity: store))
       end
 
       subject(:charge) { create(:active_billing_charge, resource: store, invoice: invoice) }

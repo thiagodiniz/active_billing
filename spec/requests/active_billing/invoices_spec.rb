@@ -3,10 +3,10 @@ require "rails_helper"
 RSpec.describe "ActiveBilling::Invoices", type: :request do
   let(:store) { create(:store) }
   let(:other_store) { create(:store) }
-  let(:billing) { create(:active_billing_billing, billable_entity: store) }
-  let(:invoice) { create(:active_billing_invoice, billing: billing) }
+  let(:subscription) { create(:active_billing_subscription, billable_entity: store) }
+  let(:invoice) { create(:active_billing_invoice, subscription: subscription) }
   let(:other_invoice) do
-    create(:active_billing_invoice, billing: create(:active_billing_billing, billable_entity: other_store))
+    create(:active_billing_invoice, subscription: create(:active_billing_subscription, billable_entity: other_store))
   end
 
   describe "GET /active_billing/invoices" do
@@ -86,7 +86,7 @@ RSpec.describe "ActiveBilling::Invoices", type: :request do
     end
 
     context "when requesting a PDF" do
-      before { ActiveBilling.configuration.company = { name: "Example, LLC", email: "billing@example.com" } }
+      before { ActiveBilling.configuration.company = { name: "Example, LLC", email: "subscription@example.com" } }
 
       it "responds with a PDF document" do
         get "/active_billing/invoices/#{invoice.id}.pdf", headers: as_entity(store)

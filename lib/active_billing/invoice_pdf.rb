@@ -80,10 +80,10 @@ module ActiveBilling
     end
 
     def period
-      start = invoice.billing&.period_start
+      start = invoice.subscription&.period_start
       return if start.nil?
 
-      finish = invoice.billing.period_end
+      finish = invoice.subscription.period_end
       [I18n.l(start), finish && I18n.l(finish)].compact.join(" - ")
     end
 
@@ -92,7 +92,7 @@ module ActiveBilling
     end
 
     def entity_recipient
-      entity = invoice.billing&.billable_entity || invoice.resource
+      entity = invoice.subscription&.billable_entity || invoice.resource
       return [] if entity.nil?
 
       RECIPIENT_ATTRIBUTES.map { |attribute| entity_value(entity, attribute) }

@@ -2,25 +2,25 @@
 
 A Rails-focused Ruby gem for SaaS billing. ActiveBilling manages billing cycles, tracks plan-based and usage-based consumption, closes cycles, generates invoices, and records payment. It runs **embedded** inside an existing Rails application (models, controllers, jobs, helpers) or **standalone** as a thin billing service that receives input from external apps over a JSON API.
 
-> **Implementation status.** This README documents both the shipped surface and the intended design. What's implemented today: the core models (`Plan`, `Billing`, `Usage`, `Event`, `Invoice`, `InvoiceItem`, `Charge`), the polymorphic billable-entity model, `billable_entity` scoping, a **read-only portal web UI**, and the **standalone JSON API** (see [Standalone usage](#standalone-usage)) — all with **override generators**. Partial lifecycle helpers are shipped as guarded transitions (`Billing#finalize!`, `Usage#close!`, `Invoice#issue!`/`#cancel!`); still **planned**: `BillingLineItem` adjustments and the **Charge state machine**. Planned sections below are marked as such. See [CHANGELOG.md](CHANGELOG.md) for the authoritative status.
+> **Implementation status.** This README documents both the shipped surface and the intended design. What's implemented today: the core models (`Plan`, `Subscription`, `Usage`, `Event`, `Invoice`, `InvoiceItem`, `Charge`), the polymorphic billable-entity model, `billable_entity` scoping, a **read-only portal web UI**, and the **standalone JSON API** (see [Standalone usage](#standalone-usage)) — all with **override generators**. Partial lifecycle helpers are shipped as guarded transitions (`Subscription#finalize!`, `Usage#close!`, `Invoice#issue!`/`#cancel!`); still **planned**: `BillingLineItem` adjustments and the **Charge state machine**. Planned sections below are marked as such. See [CHANGELOG.md](CHANGELOG.md) for the authoritative status.
 
 ## Core concepts
 
-The central concept is a **Billing**. A `Billing` record represents one configured billing cycle for a billable entity (a customer, organization, tenant — anything in your app you want to bill). It carries:
+The central concept is a **Subscription**. A `Subscription` record represents one configured billing cycle for a billable entity (a customer, organization, tenant — anything in your app you want to bill). It carries:
 
 - the cycle window (start, end, interval — monthly, weekly, or a custom interval)
 - a snapshot of the **Plan** attached to the cycle (fixed recurring price + included allowances)
 - references to the **Usage** records measured during the cycle
 - additional line items, credits, and discounts added before finalization
 
-When the cycle ends, the gem **closes** the underlying Usage, **finalizes** the Billing, **generates** the Invoice, and **records or initiates** the payment via Charge.
+When the cycle ends, the gem **closes** the underlying Usage, **finalizes** the Subscription, **generates** the Invoice, and **records or initiates** the payment via Charge.
 
 ```
 Billable Entity (Customer / Organization / Tenant)
    │
    │ has_many
    ▼
-Billing (cycle config + plan snapshot + adjustments)
+Subscription (cycle config + plan snapshot + adjustments)
    │
    ├── Usage (closed measurement of events in the cycle)
    │      └── Event (individual billable action)
@@ -36,22 +36,22 @@ Charge (payment state machine)
 
 | Model         | Responsibility                                                                  | Mutable? |
 | ------------- | ------------------------------------------------------------------------------- | -------- |
-| `Plan`        | Catalog entry: recurring price, included allowances, metadata                   | Yes (catalog edits do not affect past Billings — they snapshot) |
-| `Billing`     | One configured billing cycle for a billable entity; aggregates Usages + plan + adjustments | Yes until finalized |
+| `Plan`        | Catalog entry: recurring price, included allowances, metadata                   | Yes (catalog edits do not affect past Subscriptions — they snapshot) |
+| `Subscription`     | One configured billing cycle for a billable entity; aggregates Usages + plan + adjustments | Yes until finalized |
 | `Usage`       | Per-period measurement bucket for one billable entity                           | Yes while open; **closed** at cycle end then immutable |
 | `Event`       | A single billable action recorded against a Usage (API call, SMS, storage, etc.) | Append-only |
-| `Invoice`     | Document generated from a finalized Billing                                     | State-machine; immutable items after issued |
+| `Invoice`     | Document generated from a finalized Subscription                                     | State-machine; immutable items after issued |
 | `InvoiceItem` | Line item on an invoice                                                         | Owned by Invoice |
 | `Charge`      | Payment record + state machine (created → processing → paid / failed / expired) | State-machine |
 
 ### Lifecycle
 
 ```
-1. Configure cycle      ── create Billing with cycle window + Plan snapshot
+1. Configure cycle      ── create Subscription with cycle window + Plan snapshot
 2. Record consumption   ── append Events to the open Usage(s) for this entity
 3. Close cycle          ── Usage transitions to "closed" (no more events)
-4. Adjust Billing       ── add/edit line items, apply credits and discounts
-5. Finalize Billing     ── locks adjustments; generates Invoice + InvoiceItems
+4. Adjust Subscription       ── add/edit line items, apply credits and discounts
+5. Finalize Subscription     ── locks adjustments; generates Invoice + InvoiceItems
 6. Issue Invoice        ── invoice moves to "issued"; Charge is created
 7. Collect payment      ── Charge transitions through processing → paid/failed
 ```
@@ -60,9 +60,9 @@ Charge (payment state machine)
 
 ### Embedded mode
 
-ActiveBilling installs as a Rails engine inside your app. You **drive billing from code**, talking to `ActiveBilling::Billing`, `ActiveBilling::Usage`, etc. directly — same models, jobs, helpers as anything else in the app. On top of that you get a **read-only portal** (`index`/`show`) to *follow* those entities — the UI is for visibility, not management, which is why it ships no create/update/destroy screens. Management happens in your code.
+ActiveBilling installs as a Rails engine inside your app. You **drive billing from code**, talking to `ActiveBilling::Subscription`, `ActiveBilling::Usage`, etc. directly — same models, jobs, helpers as anything else in the app. On top of that you get a **read-only portal** (`index`/`show`) to *follow* those entities — the UI is for visibility, not management, which is why it ships no create/update/destroy screens. Management happens in your code.
 
-Use this when billing is part of the same Rails monolith as the product.
+Use this when subscription is part of the same Rails monolith as the product.
 
 ### Standalone mode
 
@@ -109,10 +109,10 @@ Requirements:
 
 ```ruby
 ActiveBilling.configure do |config|
-  # Default currency for new Billings (ISO code)
+  # Default currency for new Subscriptions (ISO code)
   config.currency = :BRL
 
-  # Default cycle interval for new Billings (:monthly, :weekly, or a Duration)
+  # Default cycle interval for new Subscriptions (:monthly, :weekly, or a Duration)
   config.default_cycle_interval = :monthly
 
   # Default penalty / interest applied to overdue Charges (in basis points; 200 = 2%)
@@ -154,9 +154,9 @@ end
 
 ```ruby
 class Customer < ApplicationRecord
-  has_many :billings,
+  has_many :subscriptions,
            as: :billable_entity,
-           class_name: "ActiveBilling::Billing",
+           class_name: "ActiveBilling::Subscription",
            dependent: :destroy
 
   has_many :usages,
@@ -194,26 +194,26 @@ plan.price_in_cents.cents  # => 9900
 
 ### 3. Open a Billing cycle
 
-`Billing` is the connector between a billable entity and its usages/invoices/charges. It belongs to a polymorphic `billable_entity` (the payer — a chain, a store, a customer…), optionally references a `Plan` (snapshotted onto the billing while it is `open`), and has a `state` of `open`/`finalized`.
+`Subscription` is the connector between a billable entity and its usages/invoices/charges. It belongs to a polymorphic `billable_entity` (the payer — a chain, a store, a customer…), optionally references a `Plan` (snapshotted onto the subscription while it is `open`), and has a `state` of `open`/`finalized`.
 
 ```ruby
-billing = customer.billings.create!(
-  plan: plan,                                    # snapshotted onto the billing
+subscription = customer.subscriptions.create!(
+  plan: plan,                                    # snapshotted onto the subscription
   period_start: Date.current.beginning_of_month,
   period_end:   Date.current.end_of_month
 )
 
-ActiveBilling::Billing.current_for(customer)     # latest open billing for an entity
+ActiveBilling::Subscription.current_for(customer)     # latest open subscription for an entity
 ```
 
-Because a Billing can aggregate `Usage` records from several resources, multiple stores under one chain can either be billed individually (one Billing each) or unified into a single Billing → Invoice → Charge.
+Because a Subscription can aggregate `Usage` records from several resources, multiple stores under one chain can either be billed individually (one Subscription each) or unified into a single Subscription → Invoice → Charge.
 
-> **Planned:** automatically opening a `Usage` when a Billing is created, and the `close!`/`finalize!` lifecycle helpers shown below, are not yet implemented. Create and associate `Usage` records directly for now.
+> **Planned:** automatically opening a `Usage` when a Subscription is created, and the `close!`/`finalize!` lifecycle helpers shown below, are not yet implemented. Create and associate `Usage` records directly for now.
 
 ### 4. Record events
 
 ```ruby
-billing.usage.events.create!(
+subscription.usage.events.create!(
   kind: "api_call",
   resource: api_request,
   metadata: { endpoint: "/v1/users" },
@@ -226,25 +226,25 @@ billing.usage.events.create!(
 > **Planned.** Steps 5–7 below (`close!`, the adjustment helpers, and `finalize!`) describe the target lifecycle and are **not yet implemented**. Today, build Invoices/Charges from Usages directly.
 
 ```ruby
-billing.close!     # closes the Usage; computes usage-derived line items;
+subscription.close!     # closes the Usage; computes usage-derived line items;
                    # adds plan recurring charge from the snapshot
 ```
 
-### 6. Adjust the Billing
+### 6. Adjust the Subscription
 
-Between close and finalize, the Billing is editable. Use this window for credits, discounts, manual line items, or to combine extra Usages.
+Between close and finalize, the Subscription is editable. Use this window for credits, discounts, manual line items, or to combine extra Usages.
 
 ```ruby
-billing.line_items.create!(key: "setup_fee", description: "One-time onboarding", quantity: 1, unit_price: 250.00)
-billing.apply_credit!(amount: 50.00, reason: "loyalty")
-billing.apply_discount!(percent: 10, reason: "promo")
-billing.add_usage!(other_closed_usage)        # combine multiple Usages
+subscription.line_items.create!(key: "setup_fee", description: "One-time onboarding", quantity: 1, unit_price: 250.00)
+subscription.apply_credit!(amount: 50.00, reason: "loyalty")
+subscription.apply_discount!(percent: 10, reason: "promo")
+subscription.add_usage!(other_closed_usage)        # combine multiple Usages
 ```
 
 ### 7. Finalize → Invoice → Charge
 
 ```ruby
-invoice = billing.finalize!     # locks the Billing, generates Invoice + items
+invoice = subscription.finalize!     # locks the Subscription, generates Invoice + items
 invoice.issue!                  # creates a Charge in "created" state
 
 # In v1, Charge state transitions are driven by your application or a
@@ -265,17 +265,17 @@ config.portal_billable_entity = ->(controller) { controller.current_user&.organi
 
 The portal never reads the entity from the query string, so users cannot browse another entity's data. Resolve it from state every request carries (session, `current_user`, subdomain, a route segment of the mount point).
 
-Mounted at the engine's path (e.g. `/billing`):
+Mounted at the engine's path (e.g. `/subscription`):
 
 | Route | Action | Purpose |
 | ----- | ------ | ------- |
-| `GET /invoices` | index | Invoices for the billable entity (via their Billing) |
+| `GET /invoices` | index | Invoices for the billable entity (via their Subscription) |
 | `GET /invoices/:id` | show | One invoice + its items |
 | `GET /usages` | index | Usages measured for the billable entity |
 | `GET /usages/:id` | show | One usage (404 for another entity's) |
-| `GET /charges` | index | Charges for the billable entity (via invoice → billing) |
+| `GET /charges` | index | Charges for the billable entity (via invoice → subscription) |
 | `GET /charges/:id` | show | One charge (404 for another entity's) |
-| `GET /plan` | show | The current plan for the billable entity (from its open Billing) |
+| `GET /plan` | show | The current plan for the billable entity (from its open Subscription) |
 
 Every portal action returns **403 Forbidden** when `config.portal_billable_entity` is not set, **400 Bad Request** when it returns `nil` (e.g. nobody is signed in), and the `show` actions return **404** for a record that belongs to another entity. All user-facing strings go through `I18n.t` with English defaults in `config/locales/active_billing.en.yml`.
 
@@ -315,7 +315,7 @@ bin/rails generate active_billing:api_base
 
 Enable the API with `config.api_enabled = true` and a `config.api_authorizer` (see
 [Configuration](#configuration)). Every request carries an `X-Api-Key` header; endpoints
-are prefixed by the mount path (`/billing` below) and versioned under `/api/v1`.
+are prefixed by the mount path (`/subscription` below) and versioned under `/api/v1`.
 
 ```http
 POST /billing/api/v1/plans
@@ -331,7 +331,7 @@ transitions are modeled as REST noun sub-resources.
 | Resource | Endpoints | Domain guards |
 | -------- | --------- | ------------- |
 | Plans | `GET/POST /plans`, `GET/PATCH/DELETE /plans/:id` | `DELETE` hard-deletes only if the plan was never used; otherwise it is **deactivated** (`active: false`). |
-| Billings | `GET/POST /billings`, `GET/PATCH/DELETE /billings/:id`, `PUT /billings/:id/plan`, `POST /billings/:id/finalization` | `DELETE` is a **soft delete**. `plan`/`finalization` only while `open` (else `409`). |
+| Subscriptions | `GET/POST /subscriptions`, `GET/PATCH/DELETE /subscriptions/:id`, `PUT /subscriptions/:id/plan`, `POST /subscriptions/:id/finalization` | `DELETE` is a **soft delete**. `plan`/`finalization` only while `open` (else `409`). |
 | Usages | `GET/POST /usages`, `GET/PATCH/DELETE /usages/:id`, `POST /usages/:id/closure` | One usage per billing cycle (`409` on duplicate). `DELETE` only when empty. A closed usage is immutable. |
 | Events | `GET/POST /events`, `GET/DELETE /events/:id` | **Append-only**: no update. Cannot be added to a closed usage. |
 | Invoices | `GET/POST /invoices`, `GET/PATCH/DELETE /invoices/:id`, `POST /invoices/:id/issuance`, `POST /invoices/:id/cancellation` | `DELETE` is a **soft delete**. `PATCH`/items only while issuable; `cancellation` only while `cancellable?`. |
@@ -390,15 +390,15 @@ Resolution order: active `ProviderAccount` → `config.provider_resolver` → `c
 | ----------------- | ----------------------------------------------------------------------------- |
 | `ProviderAccount` | customer created / updated                                                    |
 | `Plan`            | product/price created on **every** configured provider; updated on change     |
-| `Billing`         | subscription created on the account's provider; updated / cancelled on change |
+| `Subscription`         | subscription created on the account's provider; updated / cancelled on change |
 | `Invoice#issue!`  | creates a `Charge`, which creates a payment (`payment_url` for hosted pages)  |
 | `Charge`          | `refresh_from_provider!` pulls the current payment status                     |
 
-Every synced record (`Plan`, `Billing`, `Charge`, `ProviderAccount`) carries `provider` (current provider), `provider_id` (its id on that provider) and `provider_ids` (jsonb, `{ "stripe" => { "id" => "prod_1", ... } }` for every provider it has been on, so a record moved between providers keeps its history). Read one entry with `plan.provider_reference_for(:stripe)`; per-record sync can be skipped with `record.without_provider_sync { ... }`.
+Every synced record (`Plan`, `Subscription`, `Charge`, `ProviderAccount`) carries `provider` (current provider), `provider_id` (its id on that provider) and `provider_ids` (jsonb, `{ "stripe" => { "id" => "prod_1", ... } }` for every provider it has been on, so a record moved between providers keeps its history). Read one entry with `plan.provider_reference_for(:stripe)`; per-record sync can be skipped with `record.without_provider_sync { ... }`.
 
 ### Webhooks
 
-Mount the engine and point each provider at `POST <mount>/webhooks/:provider` (e.g. `/billing/webhooks/stripe`). Signatures are verified with the provider's `webhook_secret`; payment events update the matching `Charge` (`paid_at`, `failed_at`, …) and subscription events update the `Billing`'s `provider_ids` status.
+Mount the engine and point each provider at `POST <mount>/webhooks/:provider` (e.g. `/billing/webhooks/stripe`). Signatures are verified with the provider's `webhook_secret`; payment events update the matching `Charge` (`paid_at`, `failed_at`, …) and subscription events update the `Subscription`'s `provider_ids` status.
 
 ### Writing an adapter
 
@@ -442,7 +442,7 @@ class Plan < ActiveBilling::Plan
   # custom plan logic
 end
 
-class Billing < ActiveBilling::Billing
+class Subscription < ActiveBilling::Subscription
   def event_price_for(kind)
     # your pricing rules
   end
@@ -456,14 +456,14 @@ Common extension points:
 - `Usage#calculate_total_cost` — total cost across events
 - `Charge#billing_entity` — return the entity that receives payments (must be overridden)
 - Custom `Event.kinds` entries — your own billable verbs
-- `Billing#close!` / `Billing#finalize!` — _planned_ lifecycle hooks
+- `Subscription#close!` / `Subscription#finalize!` — _planned_ lifecycle hooks
 
 ## Database schema
 
 The gem creates the following tables (all prefixed `active_billing_`):
 
 - `active_billing_plans` — plan catalog
-- `active_billing_billings` — billing cycles
+- `active_billing_subscriptions` — billing cycles
 - `active_billing_usages` — per-cycle measurement buckets
 - `active_billing_events` — individual billable events
 - `active_billing_invoices` — invoice documents

@@ -43,7 +43,7 @@ module ActiveBilling
                               default: "Invalid or missing API key"))
         end
 
-        # Applies billable-entity scoping when the relation supports it (Billing, Usage,
+        # Applies billable-entity scoping when the relation supports it (Subscription, Usage,
         # Invoice, Charge). When the authorizer's scope exposes `billable_entity_type` and
         # `billable_entity_id` it is enforced and cannot be overridden by the client;
         # otherwise the optional query params are used as a filter.
