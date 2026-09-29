@@ -27,13 +27,13 @@ module ActiveBilling
           { externalId: plan.uuid, name: plan.name, price: plan.price_in_cents.cents, currency: "BRL", cycle: cycle }
         end
 
-        def subscription_attributes(billing, account, plan_reference)
+        def subscription_attributes(subscription, account, plan_reference)
           {
             items: [{ id: plan_reference.external_id, quantity: 1 }],
             customerId: account.external_customer_id,
-            externalId: billing.uuid,
+            externalId: subscription.uuid,
             methods: Array(setting(:subscription_methods).presence || ["CARD"]),
-            metadata: { billing_uuid: billing.uuid },
+            metadata: { billing_uuid: subscription.uuid },
             returnUrl: setting(:return_url),
             completionUrl: setting(:completion_url)
           }.compact
