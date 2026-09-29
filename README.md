@@ -60,13 +60,13 @@ Charge (payment state machine)
 
 ### Embedded mode
 
-ActiveBilling installs as a Rails engine inside your app. You **drive billing from code**, talking to `ActiveBilling::Subscription`, `ActiveBilling::Usage`, etc. directly — same models, jobs, helpers as anything else in the app. On top of that you get a **read-only portal** (`index`/`show`) to *follow* those entities — the UI is for visibility, not management, which is why it ships no create/update/destroy screens. Management happens in your code.
+ActiveBilling installs as a Rails engine inside your app. You **drive subscription from code**, talking to `ActiveBilling::Subscription`, `ActiveBilling::Usage`, etc. directly — same models, jobs, helpers as anything else in the app. On top of that you get a **read-only portal** (`index`/`show`) to *follow* those entities — the UI is for visibility, not management, which is why it ships no create/update/destroy screens. Management happens in your code.
 
 Use this when subscription is part of the same Rails monolith as the product.
 
 ### Standalone mode
 
-The same gem can be `mount`ed inside a thin Rails app to run as a separate billing service. Beyond code-level control, other apps in your ecosystem drive billing over the **JSON API** (see [Standalone usage](#standalone-usage)): a versioned, token-authenticated surface with **almost full control** of every model. It is **not a raw CRUD passthrough** — it runs the same domain logic and **respects the business rules and model validations** (soft deletes, one-usage-per-cycle, append-only events, the invoice state machine, and so on). The gem ships the engine, routes, controllers, and jbuilder serializers; the host app supplies the auth callable.
+The same gem can be `mount`ed inside a thin Rails app to run as a separate billing service. Beyond code-level control, other apps in your ecosystem drive subscription over the **JSON API** (see [Standalone usage](#standalone-usage)): a versioned, token-authenticated surface with **almost full control** of every model. It is **not a raw CRUD passthrough** — it runs the same domain logic and **respects the business rules and model validations** (soft deletes, one-usage-per-cycle, append-only events, the invoice state machine, and so on). The gem ships the engine, routes, controllers, and jbuilder serializers; the host app supplies the auth callable.
 
 Use this when multiple products share one billing service, or when billing needs to run in its own deployable.
 
@@ -388,7 +388,7 @@ Register `POST <mount>/webhooks/polar` in the Polar dashboard (Settings → Webh
 
 Caveats:
 
-- Polar has no server-side "create subscription" for paid products. `create_subscription` opens a Checkout Session for the plan's product (the billing's `provider_id` is the checkout id, `status: "pending"`) and the hosted `url` must be shown to the customer; the real subscription id arrives through `subscription.*` webhooks (kept in `provider_ids["polar"]["last_webhook"]`); `update_subscription` / `cancel_subscription` resolve it from `metadata["subscription_id"]` or, failing that, from `GET /checkouts/:id`.
+- Polar has no server-side "create subscription" for paid products. `create_subscription` opens a Checkout Session for the plan's product (the subscription's `provider_id` is the checkout id, `status: "pending"`) and the hosted `url` must be shown to the customer; the real subscription id arrives through `subscription.*` webhooks (kept in `provider_ids["polar"]["last_webhook"]`); `update_subscription` / `cancel_subscription` resolve it from `metadata["subscription_id"]` or, failing that, from `GET /checkouts/:id`.
 - `cancel_subscription` sets `cancel_at_period_end: true`; pass `revoke: true` in the provider settings to revoke immediately instead.
 - `create_payment` opens a one-time Checkout Session. Without `payment_product_id` a one-time product is created per charge (its id is kept in `Charge#metadata["product_id"]`).
 - `cancel_payment` raises `Providers::NotSupported`: Polar checkouts cannot be cancelled through the API, they expire on their own (`checkout.expired` → `expired`).

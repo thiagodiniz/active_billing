@@ -86,20 +86,20 @@ module ActiveBilling
 
       # --- Subscriptions -----------------------------------------------------
 
-      def create_subscription(billing, account, plan_reference)
+      def create_subscription(subscription, account, plan_reference)
         checkout = client.post("/checkouts", checkout_attributes(account).merge(
                                                products: [plan_reference.external_id],
-                                               metadata: { "active_billing_billing_id" => billing.id.to_s }
+                                               metadata: { "active_billing_billing_id" => subscription.id.to_s }
                                              ))
         checkout_result(checkout, status: "pending")
       end
 
-      def update_subscription(billing, reference)
+      def update_subscription(subscription, reference)
         subscription_id = subscription_id_for(reference)
         return checkout_result(fetch_checkout(reference.external_id), status: "pending") if subscription_id.nil?
 
-        body = { metadata: { "active_billing_billing_id" => billing.id.to_s } }
-        product_id = billing.plan&.provider_reference_for(provider_name)&.external_id
+        body = { metadata: { "active_billing_billing_id" => subscription.id.to_s } }
+        product_id = subscription.plan&.provider_reference_for(provider_name)&.external_id
         body[:product_id] = product_id if product_id
         subscription_result(client.patch("/subscriptions/#{subscription_id}", body), reference)
       end

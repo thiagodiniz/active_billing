@@ -18,7 +18,7 @@ module ActiveBilling
     let(:plan_reference) do
       provider_reference(plan, "polar", "prod_1")
     end
-    let(:billing) { create(:active_billing_billing, billable_entity: store, plan: plan) }
+    let(:subscription) { create(:active_billing_subscription, billable_entity: store, plan: plan) }
     let(:checkout_response) do
       { id: "chk_1", status: "open", url: "https://polar.sh/checkout/chk_1", customer_id: "cus_1",
         subscription_id: nil, expires_at: "2026-01-02T00:00:00Z" }
@@ -164,7 +164,7 @@ module ActiveBilling
     end
 
     describe "#create_subscription" do
-      subject(:result) { adapter.create_subscription(billing, account, plan_reference) }
+      subject(:result) { adapter.create_subscription(subscription, account, plan_reference) }
 
       let!(:stub) do
         stub_polar(:post, "/checkouts", body: checkout_response,
@@ -184,7 +184,7 @@ module ActiveBilling
 
     describe "#update_subscription" do
       let(:reference) do
-        provider_reference(billing, "polar", "chk_1", { "subscription_id" => "sub_1" })
+        provider_reference(subscription, "polar", "chk_1", { "subscription_id" => "sub_1" })
       end
       let!(:stub) do
         stub_polar(:patch, "/subscriptions/sub_1", body: { id: "sub_1", status: "active", product_id: "prod_1" },
@@ -194,24 +194,24 @@ module ActiveBilling
       before { plan_reference }
 
       it "patches the subscription product" do
-        adapter.update_subscription(billing, reference)
+        adapter.update_subscription(subscription, reference)
         expect(stub).to have_been_requested
       end
 
       it "keeps the checkout id as external id" do
-        expect(adapter.update_subscription(billing, reference).external_id).to eq("chk_1")
+        expect(adapter.update_subscription(subscription, reference).external_id).to eq("chk_1")
       end
 
       context "when the checkout has not been completed" do
         let(:reference) do
-          provider_reference(billing, "polar", "chk_1")
+          provider_reference(subscription, "polar", "chk_1")
         end
         let!(:checkout_stub) { stub_polar(:get, "/checkouts/chk_1", body: checkout_response) }
 
-        it { expect(adapter.update_subscription(billing, reference).status).to eq("pending") }
+        it { expect(adapter.update_subscription(subscription, reference).status).to eq("pending") }
 
         it "does not patch any subscription" do
-          adapter.update_subscription(billing, reference)
+          adapter.update_subscription(subscription, reference)
           expect(stub).not_to have_been_requested
         end
       end
@@ -219,7 +219,7 @@ module ActiveBilling
 
     describe "#cancel_subscription" do
       let(:reference) do
-        provider_reference(billing, "polar", "chk_1")
+        provider_reference(subscription, "polar", "chk_1")
       end
       let!(:checkout_stub) do
         stub_polar(:get, "/checkouts/chk_1", body: checkout_response.merge(subscription_id: "sub_1"))
@@ -230,17 +230,17 @@ module ActiveBilling
       end
 
       it "resolves the subscription through the checkout" do
-        adapter.cancel_subscription(billing, reference)
+        adapter.cancel_subscription(subscription, reference)
         expect(checkout_stub).to have_been_requested
       end
 
       it "cancels at period end" do
-        adapter.cancel_subscription(billing, reference)
+        adapter.cancel_subscription(subscription, reference)
         expect(stub).to have_been_requested
       end
 
-      it { expect(adapter.cancel_subscription(billing, reference).status).to eq("cancelled") }
-      it { expect(adapter.cancel_subscription(billing, reference).raw).to include("subscription_id" => "sub_1") }
+      it { expect(adapter.cancel_subscription(subscription, reference).status).to eq("cancelled") }
+      it { expect(adapter.cancel_subscription(subscription, reference).raw).to include("subscription_id" => "sub_1") }
 
       context "with revoke enabled" do
         let(:settings) { super().merge(revoke: true) }
@@ -250,7 +250,7 @@ module ActiveBilling
         end
 
         it "revokes immediately" do
-          adapter.cancel_subscription(billing, reference)
+          adapter.cancel_subscription(subscription, reference)
           expect(stub).to have_been_requested
         end
       end
@@ -258,10 +258,10 @@ module ActiveBilling
       context "when the checkout never produced a subscription" do
         let!(:checkout_stub) { stub_polar(:get, "/checkouts/chk_1", body: checkout_response.merge(status: "expired")) }
 
-        it { expect(adapter.cancel_subscription(billing, reference).status).to eq("cancelled") }
+        it { expect(adapter.cancel_subscription(subscription, reference).status).to eq("cancelled") }
 
         it "does not call the subscriptions endpoint" do
-          adapter.cancel_subscription(billing, reference)
+          adapter.cancel_subscription(subscription, reference)
           expect(stub).not_to have_been_requested
         end
       end
@@ -271,7 +271,7 @@ module ActiveBilling
       subject(:result) { adapter.create_payment(charge, account) }
 
       let(:invoice) do
-        create(:active_billing_invoice, resource: store, billing: billing, amount_in_cents: 12_345,
+        create(:active_billing_invoice, resource: store, subscription: subscription, amount_in_cents: 12_345,
                                         description: "March")
       end
       let(:charge) { create(:active_billing_charge, resource: store, invoice: invoice) }
