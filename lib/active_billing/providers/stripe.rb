@@ -72,7 +72,7 @@ module ActiveBilling
                    raw: product.merge("price_id" => price_id, "archived" => true))
       end
 
-      def create_subscription(_billing, account, plan_reference)
+      def create_subscription(_subscription, account, plan_reference)
         price_id = plan_reference&.metadata&.dig("price_id")
         raise ConfigurationError, "stripe: plan has no price_id" if price_id.blank?
 
@@ -81,19 +81,19 @@ module ActiveBilling
         subscription_result(subscription)
       end
 
-      # Swaps the subscription item onto the billing's current plan price when it
+      # Swaps the subscription item onto the subscription's current plan price when it
       # changed; otherwise just refreshes the remote state.
-      def update_subscription(billing, reference)
-        subscription = get("/subscriptions/#{reference.external_id}")
-        item = subscription.dig("items", "data", 0) || {}
-        price_id = billing.plan&.provider_reference_for(provider_name)&.metadata&.dig("price_id")
-        return subscription_result(subscription) if price_id.blank? || item.dig("price", "id") == price_id
+      def update_subscription(subscription, reference)
+        remote = get("/subscriptions/#{reference.external_id}")
+        item = remote.dig("items", "data", 0) || {}
+        price_id = subscription.plan&.provider_reference_for(provider_name)&.metadata&.dig("price_id")
+        return subscription_result(remote) if price_id.blank? || item.dig("price", "id") == price_id
 
         subscription_result(post("/subscriptions/#{reference.external_id}",
                                  "items[0][id]" => item["id"], "items[0][price]" => price_id))
       end
 
-      def cancel_subscription(_billing, reference)
+      def cancel_subscription(_subscription, reference)
         subscription_result(delete("/subscriptions/#{reference.external_id}"))
       end
 

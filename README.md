@@ -60,13 +60,13 @@ Charge (payment state machine)
 
 ### Embedded mode
 
-ActiveBilling installs as a Rails engine inside your app. You **drive billing from code**, talking to `ActiveBilling::Subscription`, `ActiveBilling::Usage`, etc. directly — same models, jobs, helpers as anything else in the app. On top of that you get a **read-only portal** (`index`/`show`) to *follow* those entities — the UI is for visibility, not management, which is why it ships no create/update/destroy screens. Management happens in your code.
+ActiveBilling installs as a Rails engine inside your app. You **drive subscription from code**, talking to `ActiveBilling::Subscription`, `ActiveBilling::Usage`, etc. directly — same models, jobs, helpers as anything else in the app. On top of that you get a **read-only portal** (`index`/`show`) to *follow* those entities — the UI is for visibility, not management, which is why it ships no create/update/destroy screens. Management happens in your code.
 
 Use this when subscription is part of the same Rails monolith as the product.
 
 ### Standalone mode
 
-The same gem can be `mount`ed inside a thin Rails app to run as a separate billing service. Beyond code-level control, other apps in your ecosystem drive billing over the **JSON API** (see [Standalone usage](#standalone-usage)): a versioned, token-authenticated surface with **almost full control** of every model. It is **not a raw CRUD passthrough** — it runs the same domain logic and **respects the business rules and model validations** (soft deletes, one-usage-per-cycle, append-only events, the invoice state machine, and so on). The gem ships the engine, routes, controllers, and jbuilder serializers; the host app supplies the auth callable.
+The same gem can be `mount`ed inside a thin Rails app to run as a separate billing service. Beyond code-level control, other apps in your ecosystem drive subscription over the **JSON API** (see [Standalone usage](#standalone-usage)): a versioned, token-authenticated surface with **almost full control** of every model. It is **not a raw CRUD passthrough** — it runs the same domain logic and **respects the business rules and model validations** (soft deletes, one-usage-per-cycle, append-only events, the invoice state machine, and so on). The gem ships the engine, routes, controllers, and jbuilder serializers; the host app supplies the auth callable.
 
 Use this when multiple products share one billing service, or when billing needs to run in its own deployable.
 

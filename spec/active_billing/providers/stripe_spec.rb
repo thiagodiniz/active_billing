@@ -170,26 +170,26 @@ module ActiveBilling
     end
 
     describe "#create_subscription" do
-      let(:billing) { create(:active_billing_billing, plan: plan, billable_entity: store) }
+      let(:subscription) { create(:active_billing_subscription, plan: plan, billable_entity: store) }
       let!(:request) do
         stub_stripe(:post, "/subscriptions", { id: "sub_1", status: "active" },
                     body: form(customer: account.external_customer_id, "items[0][price]" => "price_1"))
       end
 
-      it { expect(adapter.create_subscription(billing, account, plan_reference).external_id).to eq("sub_1") }
-      it { expect(adapter.create_subscription(billing, account, plan_reference).status).to eq("active") }
+      it { expect(adapter.create_subscription(subscription, account, plan_reference).external_id).to eq("sub_1") }
+      it { expect(adapter.create_subscription(subscription, account, plan_reference).status).to eq("active") }
 
       context "without a plan reference" do
         it "raises ConfigurationError" do
-          expect { adapter.create_subscription(billing, account, nil) }.to raise_error(Providers::ConfigurationError)
+          expect { adapter.create_subscription(subscription, account, nil) }.to raise_error(Providers::ConfigurationError)
         end
       end
     end
 
     describe "#update_subscription" do
-      let(:billing) { create(:active_billing_billing, plan: plan, billable_entity: store) }
+      let(:subscription) { create(:active_billing_subscription, plan: plan, billable_entity: store) }
       let(:reference) do
-        provider_reference(billing, "stripe", "sub_1")
+        provider_reference(subscription, "stripe", "sub_1")
       end
       let!(:fetch_request) do
         stub_stripe(:get, "/subscriptions/sub_1",
@@ -201,10 +201,10 @@ module ActiveBilling
 
         before { plan_reference }
 
-        it { expect(adapter.update_subscription(billing, reference).status).to eq("active") }
+        it { expect(adapter.update_subscription(subscription, reference).status).to eq("active") }
 
         it "does not modify the subscription" do
-          adapter.update_subscription(billing, reference)
+          adapter.update_subscription(subscription, reference)
           expect(a_request(:post, "#{base_url}/subscriptions/sub_1")).not_to have_been_made
         end
       end
@@ -219,23 +219,23 @@ module ActiveBilling
         before { plan_reference }
 
         it "swaps the subscription item price" do
-          adapter.update_subscription(billing, reference)
+          adapter.update_subscription(subscription, reference)
           expect(update_request).to have_been_requested
         end
       end
     end
 
     describe "#cancel_subscription" do
-      let(:billing) { create(:active_billing_billing, plan: plan, billable_entity: store) }
+      let(:subscription) { create(:active_billing_subscription, plan: plan, billable_entity: store) }
       let(:reference) do
-        provider_reference(billing, "stripe", "sub_1")
+        provider_reference(subscription, "stripe", "sub_1")
       end
       let!(:request) { stub_stripe(:delete, "/subscriptions/sub_1", { id: "sub_1", status: "canceled" }) }
 
-      it { expect(adapter.cancel_subscription(billing, reference).status).to eq("canceled") }
+      it { expect(adapter.cancel_subscription(subscription, reference).status).to eq("canceled") }
 
       it "deletes the subscription" do
-        adapter.cancel_subscription(billing, reference)
+        adapter.cancel_subscription(subscription, reference)
         expect(request).to have_been_requested
       end
     end
