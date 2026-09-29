@@ -49,7 +49,7 @@ module ActiveBilling
 
         def usage_params
           params.require(:usage).permit(:billable_entity_type, :billable_entity_id, :month,
-                                        :billing_id, :total_cost_in_cents, metadata: {})
+                                        :subscription_id, :total_cost_in_cents, metadata: {})
         end
       end
     end

@@ -64,18 +64,18 @@ module ActiveBilling
       end
 
       # --- Subscriptions -----------------------------------------------------
-      # `billing` is the local Billing; `account` its payer's ProviderAccount and
-      # `plan_reference` the `Providers::Reference` of the billing's plan on this provider.
+      # `subscription` is the local Subscription; `account` its payer's ProviderAccount and
+      # `plan_reference` the `Providers::Reference` of the subscription's plan on this provider.
 
-      def create_subscription(billing, account, plan_reference)
+      def create_subscription(subscription, account, plan_reference)
         not_supported!(__method__)
       end
 
-      def update_subscription(billing, reference)
+      def update_subscription(subscription, reference)
         not_supported!(__method__)
       end
 
-      def cancel_subscription(billing, reference)
+      def cancel_subscription(subscription, reference)
         not_supported!(__method__)
       end
 

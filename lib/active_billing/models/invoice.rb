@@ -28,7 +28,7 @@ module ActiveBilling
     }, default: "missing", suffix: "payment"
 
     belongs_to :resource, polymorphic: true
-    belongs_to :billing, class_name: "ActiveBilling::Billing", optional: true
+    belongs_to :subscription, class_name: "ActiveBilling::Subscription", optional: true
 
     has_many :charges, class_name: "ActiveBilling::Charge",
                        foreign_key: "invoice_id",
@@ -56,9 +56,9 @@ module ActiveBilling
     after_commit :create_charge_for_payment, if: :issued_now?
 
     scope :for_billable_entity, ->(type, id) {
-      left_joins(:billing)
-        .where(active_billing_billings: { billable_entity_type: type, billable_entity_id: id })
-        .or(left_joins(:billing).where(billing_id: nil, resource_type: type, resource_id: id))
+      left_joins(:subscription)
+        .where(active_billing_subscriptions: { billable_entity_type: type, billable_entity_id: id })
+        .or(left_joins(:subscription).where(subscription_id: nil, resource_type: type, resource_id: id))
     }
 
     def cancellable?
@@ -99,7 +99,7 @@ module ActiveBilling
     end
 
     def provider_account
-      ProviderAccount.current_for(billing&.billable_entity || resource)
+      ProviderAccount.current_for(subscription&.billable_entity || resource)
     end
 
     def to_pdf

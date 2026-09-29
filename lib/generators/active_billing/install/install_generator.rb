@@ -15,7 +15,7 @@ module ActiveBilling
         say ""
         say "Next steps:"
         say "  1. Mount the engine in config/routes.rb:"
-        say "       mount ActiveBilling::Engine => \"/billing\""
+        say "       mount ActiveBilling::Engine => \"/subscription\""
         say "  2. Install and run the migrations:"
         say "       bin/rails active_billing:install:migrations"
         say "       bin/rails db:migrate"

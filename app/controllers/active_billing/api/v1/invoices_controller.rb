@@ -54,7 +54,7 @@ module ActiveBilling
 
         # `state` is never mass-assignable (use /issuance and /cancellation).
         def invoice_params
-          params.require(:invoice).permit(:billing_id, :resource_type, :resource_id,
+          params.require(:invoice).permit(:subscription_id, :resource_type, :resource_id,
                                           :description, :amount_in_cents, :external_invoice_id,
                                           :payment_collected_medium, add_usages_ids: [])
         end
