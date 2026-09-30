@@ -100,6 +100,12 @@ module ActiveBilling
           subscription.update!(period_end: Date.current)
           expect(calls.last).to eq(:update_subscription)
         end
+
+        it "does not recreate an already synced subscription" do
+          subscription
+          described_class.perform(subscription, :create_subscription)
+          expect(calls.count(:create_subscription)).to eq(1)
+        end
       end
 
       context "when the account has never been synced" do
