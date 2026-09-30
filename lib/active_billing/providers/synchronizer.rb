@@ -73,7 +73,12 @@ module ActiveBilling
 
         account = ensure_account!(record.billable_entity)
         return if account.nil?
+        return update_subscription if record.provider_reference_for(account.provider)
 
+        create_subscription_on(account)
+      end
+
+      def create_subscription_on(account)
         plan_reference = sync_plan_on(account.provider, plan: record.plan)
         result = account.adapter.create_subscription(record, account, plan_reference)
         record.store_provider_result!(account.provider, result)
