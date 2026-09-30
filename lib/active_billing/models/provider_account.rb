@@ -16,6 +16,8 @@ module ActiveBilling
       where(billable_entity_type: type, billable_entity_id: id)
     }
 
+    before_save :reset_provider_id_on_provider_change
+
     sync_with_provider create: :create_customer, update: :update_customer, if: :synced_attributes_changed?
 
     alias_attribute :external_customer_id, :provider_id
@@ -26,11 +28,28 @@ module ActiveBilling
       for_billable_entity(entity.class.name, entity.id).first
     end
 
+    # Returns the entity's account, creating one on the provider that
+    # `Providers.name_for` resolves (resolver or default) when none exists yet.
+    def self.ensure_for!(entity)
+      return if entity.nil?
+
+      current_for(entity) || begin
+        name = Providers.name_for(entity)
+        create!(billable_entity: entity, provider: name) if name
+      end
+    end
+
     def adapter
       Providers.build(provider)
     end
 
     private
+
+    def reset_provider_id_on_provider_change
+      return unless provider_changed?
+
+      self.provider_id = provider_ids.dig(provider.to_s, "id")
+    end
 
     def synced_attributes_changed?
       saved_changes.keys.intersect?(%w[provider metadata])

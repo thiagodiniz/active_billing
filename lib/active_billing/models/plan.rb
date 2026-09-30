@@ -18,7 +18,8 @@ module ActiveBilling
 
     scope :active, -> { where(active: true) }
 
-    sync_with_provider create: :create_plan, update: :update_plan, if: :synced_attributes_changed?
+    sync_with_provider create: :create_plan, update: :update_plan, destroy: :archive_plan,
+                       if: :synced_attributes_changed?
 
     def to_snapshot
       {

@@ -81,7 +81,7 @@ module ActiveBilling
 
       def verify_webhook!(_payload, headers)
         secret = setting(:webhook_secret)
-        return true if secret.nil? || headers["X-Test-Signature"] == secret
+        return true if secret.present? && headers["X-Test-Signature"] == secret
 
         raise InvalidWebhookSignature, "test: signature mismatch"
       end

@@ -13,7 +13,7 @@ module ActiveBilling
         end
 
         def create
-          @charge = ActiveBilling::Charge.create!(charge_params)
+          @charge = ActiveBilling::Charge.create!(charge_params.merge(invoice: scoped_invoice))
           render :show, status: :created
         end
 
@@ -44,8 +44,16 @@ module ActiveBilling
         end
 
         def charge_params
-          params.require(:charge).permit(:invoice_id, :resource_type, :resource_id,
-                                         :default_penalty, :default_interest)
+          params.require(:charge).permit(:resource_type, :resource_id, :default_penalty, :default_interest)
+        end
+
+        # The invoice must belong to the caller's scope, so a scoped key cannot open a
+        # payment against another account's invoice.
+        def scoped_invoice
+          invoice_id = params.dig(:charge, :invoice_id)
+          return if invoice_id.blank?
+
+          scoped(ActiveBilling::Invoice).find(invoice_id)
         end
       end
     end
