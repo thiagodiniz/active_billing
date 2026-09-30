@@ -28,7 +28,7 @@ module ActiveBilling
     }, default: "missing", suffix: "payment"
 
     belongs_to :resource, polymorphic: true
-    belongs_to :billing, class_name: "ActiveBilling::Billing", optional: true
+    belongs_to :subscription, class_name: "ActiveBilling::Subscription", optional: true
 
     has_many :charges, class_name: "ActiveBilling::Charge",
                        foreign_key: "invoice_id",
@@ -53,11 +53,12 @@ module ActiveBilling
     before_validation :sync_items_with_usages
     before_validation :set_amount
     before_validation :set_description
+    after_commit :create_charge_for_payment, if: :issued_now?
 
     scope :for_billable_entity, ->(type, id) {
-      left_joins(:billing)
-        .where(active_billing_billings: { billable_entity_type: type, billable_entity_id: id })
-        .or(left_joins(:billing).where(billing_id: nil, resource_type: type, resource_id: id))
+      left_joins(:subscription)
+        .where(active_billing_subscriptions: { billable_entity_type: type, billable_entity_id: id })
+        .or(left_joins(:subscription).where(subscription_id: nil, resource_type: type, resource_id: id))
     }
 
     def cancellable?
@@ -93,11 +94,37 @@ module ActiveBilling
       ActiveBilling::Usage.where(id: add_usages_ids)
     end
 
+    def paid?
+      charges.any?(&:paid?)
+    end
+
+    def payer_entity
+      subscription&.billable_entity || resource
+    end
+
+    def provider_account
+      ProviderAccount.current_for(payer_entity)
+    end
+
     def to_pdf
       ActiveBilling::InvoicePdf.new(self).render
     end
 
     private
+
+    def issued_now?
+      saved_change_to_state? && issued?
+    end
+
+    # Issuing an invoice opens a Charge; the charge then asks the payer's provider
+    # for a payment (see Charge#sync_with_provider).
+    def create_charge_for_payment
+      return unless ActiveBilling.configuration.provider_sync_enabled
+      return if charges.collectable.exists?
+      return if Providers.name_for(payer_entity).nil?
+
+      charges.create!(resource: resource)
+    end
 
     def set_description
       return if description.present?

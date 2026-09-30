@@ -7,7 +7,7 @@ FactoryBot.define do
     active { true }
   end
 
-  factory :active_billing_billing, class: "ActiveBilling::Billing" do
+  factory :active_billing_subscription, class: "ActiveBilling::Subscription" do
     association :billable_entity, factory: :store
     association :plan, factory: :active_billing_plan
     state { "open" }
@@ -35,7 +35,7 @@ FactoryBot.define do
 
   factory :active_billing_invoice, class: "ActiveBilling::Invoice" do
     association :resource, factory: :store
-    association :billing, factory: :active_billing_billing
+    association :subscription, factory: :active_billing_subscription
     state { "created" }
     amount_in_cents { 5_000 }
     description { "Test invoice" }
@@ -56,5 +56,21 @@ FactoryBot.define do
   factory :active_billing_charge, class: "ActiveBilling::Charge" do
     association :resource, factory: :store
     association :invoice, factory: :active_billing_invoice
+
+    trait :synced do
+      provider { "test" }
+      sequence(:external_id) { |n| "payment_#{n}" }
+      state { "pending" }
+    end
+  end
+
+  factory :active_billing_provider_account, class: "ActiveBilling::ProviderAccount" do
+    association :billable_entity, factory: :store
+    provider { "test" }
+
+    trait :synced do
+      sequence(:provider_id) { |n| "customer_#{n}" }
+      provider_ids { { provider => { "id" => provider_id } } }
+    end
   end
 end

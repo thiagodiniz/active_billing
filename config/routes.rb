@@ -7,13 +7,16 @@ ActiveBilling::Engine.routes.draw do
   # Current plan for the billable entity.
   resource :plan, only: %i[show]
 
+  # Payment-provider webhooks, e.g. POST /active_billing/webhooks/stripe.
+  post "webhooks/:provider", to: "webhooks#create", as: :provider_webhooks
+
   # Standalone JSON API (enabled via config.api_enabled). Manipulates every model
   # while respecting the domain lifecycle; custom transitions use REST noun sub-resources.
   namespace :api, defaults: { format: :json } do
     namespace :v1 do
       resources :plans, except: %i[new edit]
 
-      resources :billings, except: %i[new edit] do
+      resources :subscriptions, except: %i[new edit] do
         member do
           put :plan # associate a plan
           post :finalization

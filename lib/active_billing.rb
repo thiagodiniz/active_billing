@@ -7,6 +7,7 @@ require "active_billing/invoice_pdf"
 
 require "active_billing/concerns/nfe_description"
 require "active_billing/concerns/timestamp_store_accessor"
+require "active_billing/concerns/provider_syncable"
 
 module ActiveBilling
   class Error < StandardError; end
@@ -47,7 +48,12 @@ module ActiveBilling
                   :company,
                   :invoice_recipient,
                   :invoice_pdf_footer,
-                  :invoice_pdf_page_size
+                  :invoice_pdf_page_size,
+                  :providers,
+                  :default_provider,
+                  :provider_resolver,
+                  :provider_sync_enabled,
+                  :provider_sync_async
 
     def initialize
       @currency               = :BRL
@@ -65,6 +71,21 @@ module ActiveBilling
       @invoice_recipient      = nil
       @invoice_pdf_footer     = nil
       @invoice_pdf_page_size  = "A4"
+      @providers              = {}
+      @default_provider       = nil
+      @provider_resolver      = nil
+      @provider_sync_enabled  = true
+      @provider_sync_async    = true
+    end
+
+    # Registers settings for a provider adapter, e.g.
+    #   config.provider :stripe, api_key: ENV["STRIPE_API_KEY"], webhook_secret: ENV["STRIPE_WEBHOOK_SECRET"]
+    def provider(name, **settings)
+      providers[name.to_sym] = settings
     end
   end
 end
+
+require "active_billing/providers"
+require "active_billing/providers/synchronizer"
+require "active_billing/providers/webhook_processor"

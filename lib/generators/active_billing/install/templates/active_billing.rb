@@ -28,14 +28,14 @@ ActiveBilling.configure do |config|
   # config.company = {
   #   name: "Example, LLC",
   #   address: "123 Fake Street\nNew York City, NY 10012",
-  #   email: "billing@example.com",
+  #   email: "subscription@example.com",
   #   phone: "+1 555 000 0000",
   #   logo: Rails.root.join("app/assets/images/logo.png")
   # }
 
   # Recipient lines printed on invoice PDFs. Defaults to the billable entity's
   # name, address, email and tax_id when it responds to them.
-  # config.invoice_recipient = ->(invoice) { [invoice.billing.billable_entity.name] }
+  # config.invoice_recipient = ->(invoice) { [invoice.subscription.billable_entity.name] }
 
   # Footer message and page size for invoice PDFs.
   # config.invoice_pdf_footer = "Thanks for your business."

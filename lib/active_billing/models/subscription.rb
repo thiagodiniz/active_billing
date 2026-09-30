@@ -1,5 +1,7 @@
 module ActiveBilling
-  class Billing < ActiveRecord::Base
+  class Subscription < ActiveRecord::Base
+    include Concerns::ProviderSyncable
+
     include Discard::Model
 
     enum :state, {
@@ -19,25 +21,35 @@ module ActiveBilling
 
     scope :for_billable_entity, ->(type, id) { where(billable_entity_type: type, billable_entity_id: id) }
 
+    sync_with_provider create: :create_subscription, update: :sync_subscription, if: :synced_attributes_changed?
+
     def self.current_for(entity)
       return if entity.nil?
 
       for_billable_entity(entity.class.name, entity.id).open.order(:created_at).last
     end
 
+    def provider_account
+      ProviderAccount.current_for(billable_entity)
+    end
+
     def associate_plan!(new_plan)
-      raise ActiveBilling::Error, "billing is not open" unless open?
+      raise ActiveBilling::Error, "subscription is not open" unless open?
 
       update!(plan: new_plan)
     end
 
     def finalize!
-      raise ActiveBilling::Error, "billing is not open" unless open?
+      raise ActiveBilling::Error, "subscription is not open" unless open?
 
       finalized!
     end
 
     private
+
+    def synced_attributes_changed?
+      (saved_changes.keys & %w[plan_id state period_start period_end metadata]).any?
+    end
 
     def snapshot_plan
       return unless open?

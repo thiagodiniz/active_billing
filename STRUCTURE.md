@@ -38,8 +38,8 @@ active_billing/
 │   │   │
 │   │   ├── models/                  # Core domain models (Zeitwerk-autoloaded by the engine)
 │   │   │   ├── plan.rb              # Plan catalog (name, price, interval, allowances)
-│   │   │   ├── billing.rb           # Billing cycle / connector for a billable entity
-│   │   │   ├── billing_line_item.rb # Adjustments applied to a Billing  (planned)
+│   │   │   ├── subscription.rb           # Billing cycle / connector for a billable entity
+│   │   │   ├── billing_line_item.rb # Adjustments applied to a Subscription  (planned)
 │   │   │   ├── usage.rb             # Per-period measurement bucket
 │   │   │   ├── event.rb             # Append-only billable events
 │   │   │   ├── invoice.rb           # Invoice document with state machine
@@ -71,7 +71,7 @@ active_billing/
 │   │           └── v1/
 │   │               ├── base_controller.rb          # gate + auth + error envelope
 │   │               ├── plans_controller.rb
-│   │               ├── billings_controller.rb
+│   │               ├── subscriptions_controller.rb
 │   │               ├── usages_controller.rb
 │   │               ├── events_controller.rb
 │   │               ├── invoices_controller.rb
@@ -94,7 +94,7 @@ active_billing/
 │   └── migrate/
 │       ├── 20260101000001_create_active_billing_tables.rb
 │       ├── 20260615000001_create_active_billing_plans.rb
-│       ├── 20260615000002_create_active_billing_billings.rb
+│       ├── 20260615000002_create_active_billing_subscriptions.rb
 │       └── 20260615000003_add_billing_to_usages_and_invoices.rb
 │
 ├── spec/                            # RSpec test suite
@@ -123,11 +123,11 @@ active_billing/
 Located in `lib/active_billing/models/` and autoloaded by the engine (Zeitwerk `push_dir` under the `ActiveBilling` namespace):
 
 1. **plan.rb** — catalog entry: `name`, `price`/`price_in_cents`, `interval`, `allowances`, `active`
-2. **billing.rb** — one billing cycle for a billable entity; snapshots a Plan; aggregates Usages (the connector that lets several resources share one Invoice/Charge)
-3. **billing_line_item.rb** — line items added to a Billing (manual items, credits, discounts) — **(planned)**
+2. **subscription.rb** — one billing cycle for a billable entity; snapshots a Plan; aggregates Usages (the connector that lets several resources share one Invoice/Charge)
+3. **billing_line_item.rb** — line items added to a Subscription (manual items, credits, discounts) — **(planned)**
 4. **usage.rb** — per-period measurement bucket; `for_billable_entity` scope; pricing hooks
 5. **event.rb** — append-only billable events recorded against a Usage
-6. **invoice.rb** — document with a state machine; `belongs_to :billing`; `for_billable_entity` scope
+6. **invoice.rb** — document with a state machine; `belongs_to :subscription`; `for_billable_entity` scope
 7. **invoice_item.rb** — line items owned by an Invoice
 8. **charge.rb** — payment record; `for_billable_entity` scope (full state machine **planned**)
 
@@ -178,8 +178,8 @@ Located under `app/` (namespace `ActiveBilling::Api::V1`):
 `db/migrate/` ships migrations for these tables:
 
 - `active_billing_charges`, `active_billing_usages`, `active_billing_events`, `active_billing_invoices`, `active_billing_invoice_items` (initial migration)
-- `active_billing_plans` and `active_billing_billings` (added this release)
-- `billing_id` columns added to `active_billing_usages` and `active_billing_invoices`
+- `active_billing_plans` and `active_billing_subscriptions` (added this release)
+- `subscription_id` columns added to `active_billing_usages` and `active_billing_invoices`
 - `active_billing_billing_line_items` — **(planned)**
 
 The initial migration enables the `pgcrypto` and `hstore` extensions. All tables use UUID secondary keys (`gen_random_uuid()`), `jsonb` for metadata, and `hstore` where key/value tracking is useful.
@@ -199,7 +199,7 @@ The initial migration enables the `pgcrypto` and `hstore` extensions. All tables
 
 - `active_billing:install:migrations` — copy migrations into host app
 - `active_billing:cycles:close` — close all due cycles (intended for cron / scheduler) — **(planned)**
-- `active_billing:cycles:finalize` — finalize closed Billings ready for invoicing — **(planned)**
+- `active_billing:cycles:finalize` — finalize closed Subscriptions ready for invoicing — **(planned)**
 
 The engine also provides Rails generators (`active_billing:views`, `active_billing:controllers`, `active_billing:install`) for overriding the portal — see the generators section above.
 
@@ -209,7 +209,7 @@ The engine also provides Rails generators (`active_billing:views`, `active_billi
 
 1. Add `gem "active_billing"` to host Gemfile
 2. Run migrations
-3. Use the models directly: `Customer#billings`, `ActiveBilling::Plan.create!`, `ActiveBilling::Billing.current_for(entity)`, etc. (lifecycle helpers like `billing.close!` are **planned**)
+3. Use the models directly: `Customer#subscriptions`, `ActiveBilling::Plan.create!`, `ActiveBilling::Subscription.current_for(entity)`, etc. (lifecycle helpers like `subscription.close!` are **planned**)
 4. Optionally mount the engine to get the read-only [portal web UI](README.md#web-ui-portal)
 
 ### Standalone (planned)
@@ -243,7 +243,7 @@ You can extend ActiveBilling by:
 2. **Adding** custom event kinds via the `Event` enum
 3. **Generating** local copies of the portal views/controllers (`active_billing:views` / `:controllers`) to customize the UI
 4. **Hooking** Charge callbacks for payment-provider integration
-5. **Overriding** `Billing#close!` / `Billing#finalize!` — _planned_ lifecycle hooks
+5. **Overriding** `Subscription#close!` / `Subscription#finalize!` — _planned_ lifecycle hooks
 6. **Serving** standalone webhooks for `cycle.closed`, `invoice.issued`, `charge.paid` — _planned_
 
 ## Testing

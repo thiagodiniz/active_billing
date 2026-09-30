@@ -64,7 +64,7 @@ RSpec.describe "ActiveBilling::Api::V1::Plans", type: :request do
     context "when the plan has been used" do
       it "deactivates instead of deleting" do
         plan = create(:active_billing_plan)
-        create(:active_billing_billing, plan: plan)
+        create(:active_billing_subscription, plan: plan)
 
         expect do
           delete "#{base}/#{plan.id}", headers: api_headers
