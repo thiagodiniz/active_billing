@@ -14,6 +14,23 @@ RSpec.describe "ActiveBilling::Api::V1::Charges", type: :request do
            headers: api_headers
       expect(response).to have_http_status(:created)
     end
+
+    it "exposes payment state" do
+      post base, params: { charge: { resource_type: "Store", resource_id: store.id } }, headers: api_headers
+      expect(response.parsed_body).to include("state" => "created", "payment_url" => nil)
+    end
+
+    context "when the invoice belongs to another entity" do
+      it "returns 404" do
+        invoice = create(:active_billing_invoice,
+                         subscription: create(:active_billing_subscription, billable_entity: create(:store)))
+        post base,
+             params: { billable_entity_type: "Store", billable_entity_id: store.id,
+                       charge: { invoice_id: invoice.id, resource_type: "Store", resource_id: store.id } },
+             headers: api_headers
+        expect(response).to have_http_status(:not_found)
+      end
+    end
   end
 
   describe "DELETE /charges/:id" do

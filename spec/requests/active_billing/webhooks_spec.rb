@@ -42,6 +42,15 @@ RSpec.describe "ActiveBilling::Webhooks", :providers, type: :request do
       end
     end
 
+    context "without a configured secret" do
+      before { ActiveBilling.configuration.providers[:test] = {} }
+
+      it "responds unauthorized" do
+        post "/active_billing/webhooks/test", params: payload, headers: headers.except("X-Test-Signature")
+        expect(response).to have_http_status(:unauthorized)
+      end
+    end
+
     context "with an unknown provider" do
       it "responds not found" do
         post "/active_billing/webhooks/nope", params: payload, headers: headers

@@ -66,6 +66,15 @@ module ActiveBilling
           subscription
           expect(calls).not_to include(:create_subscription)
         end
+
+        context "with a default provider" do
+          before { ActiveBilling.configuration.default_provider = :test }
+
+          it "creates the account and the remote subscription" do
+            expect(subscription.provider_reference_for(:test)).to be_present
+            expect(ProviderAccount.current_for(store)).to be_synced
+          end
+        end
       end
 
       context "when the entity has a provider account" do

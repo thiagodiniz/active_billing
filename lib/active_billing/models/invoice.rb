@@ -98,8 +98,12 @@ module ActiveBilling
       charges.any?(&:paid?)
     end
 
+    def payer_entity
+      subscription&.billable_entity || resource
+    end
+
     def provider_account
-      ProviderAccount.current_for(subscription&.billable_entity || resource)
+      ProviderAccount.current_for(payer_entity)
     end
 
     def to_pdf
@@ -116,8 +120,8 @@ module ActiveBilling
     # for a payment (see Charge#sync_with_provider).
     def create_charge_for_payment
       return unless ActiveBilling.configuration.provider_sync_enabled
-      return if charges.exists?
-      return if provider_account.nil?
+      return if charges.collectable.exists?
+      return if Providers.name_for(payer_entity).nil?
 
       charges.create!(resource: resource)
     end

@@ -82,6 +82,13 @@ module ActiveBilling
           invoice.update!(state: "issued")
           expect { invoice.update!(description: "changed") }.not_to change(Charge, :count)
         end
+
+        it "opens a new charge when the previous one failed" do
+          invoice.update!(state: "issued")
+          invoice.charges.first.update!(state: "failed")
+          invoice.update!(state: "failed")
+          expect { invoice.update!(state: "issued") }.to change(invoice.charges, :count).by(1)
+        end
       end
 
       context "when the payer has no provider account" do
