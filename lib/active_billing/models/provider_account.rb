@@ -46,7 +46,7 @@ module ActiveBilling
     private
 
     def reset_provider_id_on_provider_change
-      return unless provider_changed?
+      return if new_record? || !provider_changed?
 
       self.provider_id = provider_ids.dig(provider.to_s, "id")
     end
