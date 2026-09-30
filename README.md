@@ -60,13 +60,13 @@ Charge (payment state machine)
 
 ### Embedded mode
 
-ActiveBilling installs as a Rails engine inside your app. You **drive billing from code**, talking to `ActiveBilling::Subscription`, `ActiveBilling::Usage`, etc. directly — same models, jobs, helpers as anything else in the app. On top of that you get a **read-only portal** (`index`/`show`) to *follow* those entities — the UI is for visibility, not management, which is why it ships no create/update/destroy screens. Management happens in your code.
+ActiveBilling installs as a Rails engine inside your app. You **drive subscription from code**, talking to `ActiveBilling::Subscription`, `ActiveBilling::Usage`, etc. directly — same models, jobs, helpers as anything else in the app. On top of that you get a **read-only portal** (`index`/`show`) to *follow* those entities — the UI is for visibility, not management, which is why it ships no create/update/destroy screens. Management happens in your code.
 
 Use this when subscription is part of the same Rails monolith as the product.
 
 ### Standalone mode
 
-The same gem can be `mount`ed inside a thin Rails app to run as a separate billing service. Beyond code-level control, other apps in your ecosystem drive billing over the **JSON API** (see [Standalone usage](#standalone-usage)): a versioned, token-authenticated surface with **almost full control** of every model. It is **not a raw CRUD passthrough** — it runs the same domain logic and **respects the business rules and model validations** (soft deletes, one-usage-per-cycle, append-only events, the invoice state machine, and so on). The gem ships the engine, routes, controllers, and jbuilder serializers; the host app supplies the auth callable.
+The same gem can be `mount`ed inside a thin Rails app to run as a separate billing service. Beyond code-level control, other apps in your ecosystem drive subscription over the **JSON API** (see [Standalone usage](#standalone-usage)): a versioned, token-authenticated surface with **almost full control** of every model. It is **not a raw CRUD passthrough** — it runs the same domain logic and **respects the business rules and model validations** (soft deletes, one-usage-per-cycle, append-only events, the invoice state machine, and so on). The gem ships the engine, routes, controllers, and jbuilder serializers; the host app supplies the auth callable.
 
 Use this when multiple products share one billing service, or when billing needs to run in its own deployable.
 
@@ -372,6 +372,21 @@ ActiveBilling.configure do |config|
   config.provider_sync_async   = true             # false => sync inline instead of via ProviderSyncJob
 end
 ```
+
+#### Stripe
+
+```ruby
+config.provider :stripe,
+                api_key:        ENV["STRIPE_SECRET_KEY"],      # required
+                webhook_secret: ENV["STRIPE_WEBHOOK_SECRET"],  # required for webhooks (whsec_...)
+                success_url:    "https://app.example.com/billing/success", # required for payments
+                cancel_url:     "https://app.example.com/billing/cancel",  # required for payments
+                webhook_tolerance: 300                         # optional, seconds
+```
+
+- Plans become a Product plus a recurring Price (`unit_amount`, `currency` from `config.currency`, `recurring[interval]` = `month`/`year`). Prices are immutable on Stripe, so changing a plan's price creates a new Price and archives the previous one; the current price id is kept in `plan.provider_ids["stripe"]["price_id"]`.
+- Payments are hosted [Checkout Sessions](https://docs.stripe.com/api/checkout/sessions) in `payment` mode; `Charge#payment_url` is the session `url`. `cancel_payment` expires the session (only possible while it is `open`).
+- Register `POST <mount>/webhooks/stripe` as a webhook endpoint and subscribe to `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `checkout.session.expired` and `customer.subscription.*`. Signatures are verified from the `Stripe-Signature` header; other event types are ignored.
 
 ### Per-account providers
 
