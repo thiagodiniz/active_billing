@@ -397,7 +397,7 @@ ActiveBilling::ProviderAccount.create!(billable_entity: customer, provider: :aba
 # => creates the remote customer and stores external_customer_id
 ```
 
-Resolution order: active `ProviderAccount` → `config.provider_resolver` → `config.default_provider`.
+Resolution order: active `ProviderAccount` → `config.provider_resolver` → `config.default_provider`. When an entity has no `ProviderAccount` yet, the first subscription or payment sync creates one on the resolved provider (`ProviderAccount.ensure_for!(entity)`). Changing an account's `provider` clears its current `provider_id` and registers the customer on the new provider; the old id stays in `provider_ids`.
 
 ### What gets synchronized
 

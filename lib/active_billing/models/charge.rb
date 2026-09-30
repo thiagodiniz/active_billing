@@ -3,6 +3,7 @@ module ActiveBilling
     include Concerns::ProviderSyncable
 
     FINISHED_STATES = %w[paid failed expired cancelled].freeze
+    UNCOLLECTABLE_STATES = %w[failed expired cancelled].freeze
 
     include Discard::Model
 
@@ -32,6 +33,7 @@ module ActiveBilling
         .where(active_billing_subscriptions: { billable_entity_type: type, billable_entity_id: id })
     }
     scope :unfinished, -> { where.not(state: FINISHED_STATES) }
+    scope :collectable, -> { where.not(state: UNCOLLECTABLE_STATES) }
 
     sync_with_provider create: :create_payment
 
@@ -70,8 +72,12 @@ module ActiveBilling
       FINISHED_STATES.include?(state)
     end
 
+    def payer_entity
+      invoice&.payer_entity || resource
+    end
+
     def provider_account
-      invoice&.provider_account || ProviderAccount.current_for(resource)
+      ProviderAccount.current_for(payer_entity)
     end
 
     # Applies a `Providers::Result` returned by the adapter for this charge.
