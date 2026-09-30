@@ -42,7 +42,7 @@ module ActiveBilling
       def update_customer
         return create_customer unless record.synced?
 
-        record.adapter.update_customer(record)
+        record.store_provider_result!(record.provider, record.adapter.update_customer(record))
         record
       end
 
@@ -53,7 +53,10 @@ module ActiveBilling
       def create_plan
         Providers.configured_names.map { |name| sync_plan_on(name) }
       end
-      alias update_plan create_plan
+
+      def update_plan
+        record.active? ? create_plan : archive_plan
+      end
 
       def archive_plan
         record.provider_ids.keys.filter_map do |name|
@@ -68,7 +71,7 @@ module ActiveBilling
       def create_subscription
         return if record.plan.nil?
 
-        account = ensure_account!(record.provider_account)
+        account = ensure_account!(record.billable_entity)
         return if account.nil?
 
         plan_reference = sync_plan_on(account.provider, plan: record.plan)
@@ -99,7 +102,7 @@ module ActiveBilling
       def create_payment
         return record if record.synced?
 
-        account = ensure_account!(record.provider_account)
+        account = ensure_account!(record.payer_entity)
         return record if account.nil?
 
         record.apply_provider_result!(account.provider, account.adapter.create_payment(record, account))
@@ -128,7 +131,8 @@ module ActiveBilling
         record
       end
 
-      def ensure_account!(account)
+      def ensure_account!(entity)
+        account = ProviderAccount.ensure_for!(entity)
         return if account.nil?
         return account if account.synced?
 
